@@ -10,6 +10,6 @@ Please use the following if you wish to learn more about each.
 
 The current iteration of the ASRL robotic arm is equivalent to Chris Annin’s AR4 Robot, which his documentation can be found here (https://www.anninrobotics.com/)
 
-Previous work completed on ROME by past project members can be found here (https://github.com/hunterqueb/ROME)
+Previous work completed on ROME by past project members can be found here (https://github.com/hunterqueb/ROME) We have tried uploading the files in Hunter's repository to this organization, however, Github doesn't like uploading more than 100 files at a time nor does it like uploading zip files larger than 25 MB, so for the time being, we recommend downloading the files directly from his repository. (WIP)
 
 Teensy Board Manager URL: https://www.pjrc.com/teensy/package_teensy_index.json
