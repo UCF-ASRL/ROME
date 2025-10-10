@@ -8,7 +8,7 @@
 //Old limits?? Unsure why these were picked
 //float limits[6] = {-170.0,132.0,-141.0,-155.0,105.0,-155.0};
 //Zero set straight up
-float limits[6] = {-180.0,42.5,145.0,-155.0,86.5,155.0};
+float limits[6] = {-180.0,42.5,-145.0,-155.0,86.5,155.0};
 
 
 // Expressed in Joint frame
@@ -97,7 +97,7 @@ void loop() {
       {
         //if(i == 3) continue;
         // Check for reversed action
-        if (i == 0) {//|| (i == 2)) { //((i == 1) || (i == 2)) || (i == 5){
+        if ((i == 0) || (i==2)) {//|| (i == 2)) { //((i == 1) || (i == 2)) || (i == 5){
           
           steppers[i].setSpeed(-500);
           //Move each motor to limit switch(with debounce) and then set limits.
