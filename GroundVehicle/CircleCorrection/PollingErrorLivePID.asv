@@ -1,3 +1,7 @@
+clear all
+close all
+clc
+
 %% --- Circle Parameters --- %%     
 R     = 0.25;               % radius [m]
 T     = 15;                 % period [s]
@@ -6,12 +10,13 @@ dt    = 0.05;               % MATLAB control step [s] (Arduino base step can be 
 numFrames = int16(T*(1/dt)) + 1;
 
 %% --- PID Parameters (need to be tuned) --- %%
-Kpx = 0.0;  Kdx = 0.0;  Kix = 0.0;  
+Kpx = 0.001;  Kdx = 0.0;  Kix = 0.000;  
 Kpy = Kpx;  Kdy = Kdx;  Kiy = Kix;
 
 %% --- Buffers --- %%
 x       = zeros(1,numFrames); 
 y       = zeros(1,numFrames);
+yaw     = zeros(1,numFrames);
 time_s  = zeros(1,numFrames);
 ex_log  = zeros(1,numFrames);
 ey_log  = zeros(1,numFrames);
@@ -92,21 +97,31 @@ for idx = 2:numFrames
     time_s(idx) = t;
 
     % Measured position in meters, zeroed at origin
-    x_cap = (data.RigidBodies(1).x - x_origin + R);
-    y_cap = (data.RigidBodies(1).y - y_origin);
-    x(idx) = x_cap;  y(idx) = y_cap;
+    x_cap = -(data.RigidBodies(1).x - x_origin - R);
+    y_cap = -(data.RigidBodies(1).y - y_origin);
+
+    %pull all captured quaternions into matrix. Convert to eularian values
+    %(yaw, pitch, roll) and save in eul_cap%
+
+    q_cap = [data.RigidBodies(1).qx, data.RigidBodies(1).qy, data.RigidBodies(1).qz, data.RigidBodies(1).qw];
+    eul_cap = [quat2eul(q_cap)];
+    yaw_cap = deg2rad(eul_cap(1))
+  
+    x(idx) = x_cap;  y(idx) = y_cap; yaw(idx) = yaw_cap;
 
     % Console print (keep your style)
     fprintf('Name:"%s"  ', model.RigidBody(1).Name);
     fprintf('Frame #:"%d"  ', data.iFrame - frame_og);
-    fprintf('X:%0.1fmm  ', data.RigidBodies(1).x * 1000); %Motive sends data in Meters, this converts to mm
-    fprintf('Y:%0.1fmm  ', data.RigidBodies(1).y * 1000);
+    fprintf('X:%0.1fmm  ', x_cap * 1000); %Motive sends data in Meters, this converts to mm
+    fprintf('Y:%0.1fmm  ', y_cap * 1000);
+    fprintf('Yaw:%0.1fmm  ', rad2deg(yaw_cap));
     fprintf('T:%0.2f\n', t);
 
     %% --- Reference (circle) position & velocity --- %%
     % Keep center at (0,0) after zeroing originsframe_og
     x_ref = (R*cos(omega*t)); 
     y_ref = (R*sin(omega*t));
+    
     xr_log(idx) = x_ref;  yr_log(idx) = y_ref;
 
     % Reference body velocities for ROME path
@@ -114,8 +129,8 @@ for idx = 2:numFrames
     vy_ref =  R*omega*cos(omega*t);
 
     %% --- Error --- %%
-    ex = x_ref - x_cap;
-    ey = y_ref - y_cap;
+    ex = (x_ref - x_cap)/dt;
+    ey = (y_ref - y_cap)/dt;
     ex_log(idx) = ex;  ey_log(idx) = ey;
 
     %% --- PID correction velocities (m/s) --- %%
@@ -132,7 +147,7 @@ for idx = 2:numFrames
     vy = vy_ref + vy_corr;
 
     %% --- Map to wheel speeds --- %%
-    w_cmd_rads = InverseKinematics([vx; vy; 0]);
+    w_cmd_rads = InverseKinematics([vx; vy; yaw_cap]);
     w_cmd_rpm  = w_cmd_rads * (60/(2*pi));
 
     % Send to MEGA
@@ -190,3 +205,36 @@ end
 fclose(fid);
 
 fprintf('\nALL DONE, CHECK OUT THOSE TEXT FILES\n');
+
+% Plot commanded vs tracked position
+figure;
+hold on;
+plot(xr_log, yr_log, 'b', 'LineWidth', 2)
+plot(x, y, 'r', 'LineWidth', 2)
+title('Commanded vs Tracked Position')
+xlabel('x pos (m)')
+ylabel('y pos (m)')
+legend({'Commanded','Tracked'},'Location','southwest')
+axis square
+axis equal
+hold off
+
+% Add 10 percent padding to plot
+xlim_current = xlim;
+ylim_current = ylim;
+x_buffer = (xlim_current(2) - xlim_current(1)) * 0.1;
+y_buffer = (ylim_current(2) - ylim_current(1)) * 0.1;
+xlim([xlim_current(1) - x_buffer, xlim_current(2) + x_buffer]);
+ylim([ylim_current(1) - y_buffer, ylim_current(2) + y_buffer]);
+
+% Plot commanded wheel speeds
+% figure;
+% hold on;
+% plot(time_s, wcmd_log(:, 1).', 'b', 'LineWidth', 2)
+% plot(time_s, wcmd_log(:, 2).', 'r', 'LineWidth', 2)
+% plot(time_s, wcmd_log(:, 3).', 'g', 'LineWidth', 2)
+% plot(time_s, wcmd_log(:, 4).', 'y', 'LineWidth', 2)
+% title('Wheel Speed vs Time')
+% xlabel('Time (sec)')
+% ylabel('Wheel Speed (RPM)')
+% legend({'Wheel 1','Wheel 2', 'Wheel 3', 'Wheel 4'},'Location','southwest')

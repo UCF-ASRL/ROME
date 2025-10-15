@@ -1,0 +1,603 @@
+Frame 1 Data: X_meas = 0.250, Y_meas = 0.000, X_ref = 0.000, Y_ref = 0.000, Time = 0.00
+
+Frame 2 Data: X_meas = 0.250, Y_meas = 0.000, X_ref = 0.250, Y_ref = 0.005, Time = 0.05
+
+Frame 3 Data: X_meas = 0.250, Y_meas = 0.000, X_ref = 0.249, Y_ref = 0.017, Time = 0.17
+
+Frame 4 Data: X_meas = 0.250, Y_meas = -0.000, X_ref = 0.249, Y_ref = 0.023, Time = 0.22
+
+Frame 5 Data: X_meas = 0.250, Y_meas = -0.003, X_ref = 0.248, Y_ref = 0.028, Time = 0.27
+
+Frame 6 Data: X_meas = 0.249, Y_meas = -0.007, X_ref = 0.248, Y_ref = 0.033, Time = 0.32
+
+Frame 7 Data: X_meas = 0.249, Y_meas = -0.011, X_ref = 0.247, Y_ref = 0.038, Time = 0.37
+
+Frame 8 Data: X_meas = 0.247, Y_meas = -0.015, X_ref = 0.246, Y_ref = 0.043, Time = 0.42
+
+Frame 9 Data: X_meas = 0.247, Y_meas = -0.020, X_ref = 0.245, Y_ref = 0.049, Time = 0.47
+
+Frame 10 Data: X_meas = 0.245, Y_meas = -0.024, X_ref = 0.244, Y_ref = 0.054, Time = 0.52
+
+Frame 11 Data: X_meas = 0.244, Y_meas = -0.028, X_ref = 0.243, Y_ref = 0.059, Time = 0.57
+
+Frame 12 Data: X_meas = 0.242, Y_meas = -0.032, X_ref = 0.242, Y_ref = 0.064, Time = 0.62
+
+Frame 13 Data: X_meas = 0.241, Y_meas = -0.037, X_ref = 0.240, Y_ref = 0.069, Time = 0.67
+
+Frame 14 Data: X_meas = 0.239, Y_meas = -0.041, X_ref = 0.239, Y_ref = 0.074, Time = 0.72
+
+Frame 15 Data: X_meas = 0.238, Y_meas = -0.045, X_ref = 0.237, Y_ref = 0.079, Time = 0.77
+
+Frame 16 Data: X_meas = 0.235, Y_meas = -0.049, X_ref = 0.236, Y_ref = 0.084, Time = 0.82
+
+Frame 17 Data: X_meas = 0.233, Y_meas = -0.054, X_ref = 0.234, Y_ref = 0.089, Time = 0.87
+
+Frame 18 Data: X_meas = 0.231, Y_meas = -0.058, X_ref = 0.232, Y_ref = 0.094, Time = 0.92
+
+Frame 19 Data: X_meas = 0.229, Y_meas = -0.063, X_ref = 0.230, Y_ref = 0.098, Time = 0.97
+
+Frame 20 Data: X_meas = 0.227, Y_meas = -0.067, X_ref = 0.228, Y_ref = 0.103, Time = 1.02
+
+Frame 21 Data: X_meas = 0.224, Y_meas = -0.071, X_ref = 0.225, Y_ref = 0.108, Time = 1.07
+
+Frame 22 Data: X_meas = 0.221, Y_meas = -0.075, X_ref = 0.223, Y_ref = 0.113, Time = 1.12
+
+Frame 23 Data: X_meas = 0.218, Y_meas = -0.079, X_ref = 0.221, Y_ref = 0.117, Time = 1.17
+
+Frame 24 Data: X_meas = 0.216, Y_meas = -0.083, X_ref = 0.218, Y_ref = 0.122, Time = 1.22
+
+Frame 25 Data: X_meas = 0.213, Y_meas = -0.088, X_ref = 0.216, Y_ref = 0.127, Time = 1.27
+
+Frame 26 Data: X_meas = 0.210, Y_meas = -0.092, X_ref = 0.213, Y_ref = 0.131, Time = 1.32
+
+Frame 27 Data: X_meas = 0.207, Y_meas = -0.096, X_ref = 0.210, Y_ref = 0.135, Time = 1.37
+
+Frame 28 Data: X_meas = 0.203, Y_meas = -0.100, X_ref = 0.207, Y_ref = 0.140, Time = 1.42
+
+Frame 29 Data: X_meas = 0.200, Y_meas = -0.104, X_ref = 0.204, Y_ref = 0.144, Time = 1.47
+
+Frame 30 Data: X_meas = 0.196, Y_meas = -0.109, X_ref = 0.201, Y_ref = 0.148, Time = 1.52
+
+Frame 31 Data: X_meas = 0.193, Y_meas = -0.113, X_ref = 0.198, Y_ref = 0.153, Time = 1.57
+
+Frame 32 Data: X_meas = 0.189, Y_meas = -0.116, X_ref = 0.195, Y_ref = 0.157, Time = 1.62
+
+Frame 33 Data: X_meas = 0.185, Y_meas = -0.121, X_ref = 0.192, Y_ref = 0.161, Time = 1.67
+
+Frame 34 Data: X_meas = 0.181, Y_meas = -0.124, X_ref = 0.188, Y_ref = 0.165, Time = 1.72
+
+Frame 35 Data: X_meas = 0.177, Y_meas = -0.128, X_ref = 0.185, Y_ref = 0.169, Time = 1.77
+
+Frame 36 Data: X_meas = 0.173, Y_meas = -0.132, X_ref = 0.181, Y_ref = 0.172, Time = 1.82
+
+Frame 37 Data: X_meas = 0.168, Y_meas = -0.136, X_ref = 0.177, Y_ref = 0.176, Time = 1.87
+
+Frame 38 Data: X_meas = 0.164, Y_meas = -0.140, X_ref = 0.174, Y_ref = 0.180, Time = 1.92
+
+Frame 39 Data: X_meas = 0.159, Y_meas = -0.144, X_ref = 0.170, Y_ref = 0.183, Time = 1.97
+
+Frame 40 Data: X_meas = 0.155, Y_meas = -0.148, X_ref = 0.166, Y_ref = 0.187, Time = 2.02
+
+Frame 41 Data: X_meas = 0.151, Y_meas = -0.152, X_ref = 0.162, Y_ref = 0.190, Time = 2.07
+
+Frame 42 Data: X_meas = 0.146, Y_meas = -0.156, X_ref = 0.158, Y_ref = 0.194, Time = 2.12
+
+Frame 43 Data: X_meas = 0.142, Y_meas = -0.160, X_ref = 0.154, Y_ref = 0.197, Time = 2.17
+
+Frame 44 Data: X_meas = 0.137, Y_meas = -0.164, X_ref = 0.150, Y_ref = 0.200, Time = 2.22
+
+Frame 45 Data: X_meas = 0.132, Y_meas = -0.168, X_ref = 0.146, Y_ref = 0.203, Time = 2.27
+
+Frame 46 Data: X_meas = 0.128, Y_meas = -0.172, X_ref = 0.141, Y_ref = 0.206, Time = 2.32
+
+Frame 47 Data: X_meas = 0.123, Y_meas = -0.175, X_ref = 0.137, Y_ref = 0.209, Time = 2.37
+
+Frame 48 Data: X_meas = 0.119, Y_meas = -0.179, X_ref = 0.132, Y_ref = 0.212, Time = 2.42
+
+Frame 49 Data: X_meas = 0.114, Y_meas = -0.183, X_ref = 0.128, Y_ref = 0.215, Time = 2.47
+
+Frame 50 Data: X_meas = 0.109, Y_meas = -0.187, X_ref = 0.123, Y_ref = 0.217, Time = 2.52
+
+Frame 51 Data: X_meas = 0.105, Y_meas = -0.191, X_ref = 0.119, Y_ref = 0.220, Time = 2.57
+
+Frame 52 Data: X_meas = 0.100, Y_meas = -0.195, X_ref = 0.114, Y_ref = 0.222, Time = 2.62
+
+Frame 53 Data: X_meas = 0.095, Y_meas = -0.199, X_ref = 0.110, Y_ref = 0.225, Time = 2.67
+
+Frame 54 Data: X_meas = 0.091, Y_meas = -0.203, X_ref = 0.105, Y_ref = 0.227, Time = 2.72
+
+Frame 55 Data: X_meas = 0.086, Y_meas = -0.207, X_ref = 0.100, Y_ref = 0.229, Time = 2.77
+
+Frame 56 Data: X_meas = 0.081, Y_meas = -0.211, X_ref = 0.095, Y_ref = 0.231, Time = 2.82
+
+Frame 57 Data: X_meas = 0.077, Y_meas = -0.215, X_ref = 0.090, Y_ref = 0.233, Time = 2.87
+
+Frame 58 Data: X_meas = 0.072, Y_meas = -0.219, X_ref = 0.086, Y_ref = 0.235, Time = 2.92
+
+Frame 59 Data: X_meas = 0.068, Y_meas = -0.223, X_ref = 0.081, Y_ref = 0.237, Time = 2.97
+
+Frame 60 Data: X_meas = 0.063, Y_meas = -0.227, X_ref = 0.076, Y_ref = 0.238, Time = 3.02
+
+Frame 61 Data: X_meas = 0.058, Y_meas = -0.231, X_ref = 0.071, Y_ref = 0.240, Time = 3.07
+
+Frame 62 Data: X_meas = 0.054, Y_meas = -0.235, X_ref = 0.066, Y_ref = 0.241, Time = 3.12
+
+Frame 63 Data: X_meas = 0.049, Y_meas = -0.239, X_ref = 0.060, Y_ref = 0.243, Time = 3.17
+
+Frame 64 Data: X_meas = 0.045, Y_meas = -0.243, X_ref = 0.055, Y_ref = 0.244, Time = 3.22
+
+Frame 65 Data: X_meas = 0.040, Y_meas = -0.247, X_ref = 0.050, Y_ref = 0.245, Time = 3.27
+
+Frame 66 Data: X_meas = 0.036, Y_meas = -0.250, X_ref = 0.045, Y_ref = 0.246, Time = 3.32
+
+Frame 67 Data: X_meas = 0.032, Y_meas = -0.254, X_ref = 0.040, Y_ref = 0.247, Time = 3.37
+
+Frame 68 Data: X_meas = 0.028, Y_meas = -0.257, X_ref = 0.035, Y_ref = 0.248, Time = 3.42
+
+Frame 69 Data: X_meas = 0.024, Y_meas = -0.261, X_ref = 0.030, Y_ref = 0.248, Time = 3.47
+
+Frame 70 Data: X_meas = 0.019, Y_meas = -0.264, X_ref = 0.024, Y_ref = 0.249, Time = 3.52
+
+Frame 71 Data: X_meas = 0.015, Y_meas = -0.268, X_ref = 0.019, Y_ref = 0.249, Time = 3.57
+
+Frame 72 Data: X_meas = 0.011, Y_meas = -0.272, X_ref = 0.014, Y_ref = 0.250, Time = 3.62
+
+Frame 73 Data: X_meas = 0.006, Y_meas = -0.275, X_ref = 0.009, Y_ref = 0.250, Time = 3.67
+
+Frame 74 Data: X_meas = 0.003, Y_meas = -0.278, X_ref = 0.003, Y_ref = 0.250, Time = 3.72
+
+Frame 75 Data: X_meas = -0.001, Y_meas = -0.281, X_ref = -0.002, Y_ref = 0.250, Time = 3.77
+
+Frame 76 Data: X_meas = -0.005, Y_meas = -0.284, X_ref = -0.007, Y_ref = 0.250, Time = 3.82
+
+Frame 77 Data: X_meas = -0.009, Y_meas = -0.288, X_ref = -0.012, Y_ref = 0.250, Time = 3.87
+
+Frame 78 Data: X_meas = -0.013, Y_meas = -0.290, X_ref = -0.017, Y_ref = 0.249, Time = 3.92
+
+Frame 79 Data: X_meas = -0.018, Y_meas = -0.293, X_ref = -0.023, Y_ref = 0.249, Time = 3.97
+
+Frame 80 Data: X_meas = -0.022, Y_meas = -0.295, X_ref = -0.028, Y_ref = 0.248, Time = 4.02
+
+Frame 81 Data: X_meas = -0.026, Y_meas = -0.298, X_ref = -0.033, Y_ref = 0.248, Time = 4.07
+
+Frame 82 Data: X_meas = -0.030, Y_meas = -0.300, X_ref = -0.038, Y_ref = 0.247, Time = 4.12
+
+Frame 83 Data: X_meas = -0.034, Y_meas = -0.302, X_ref = -0.043, Y_ref = 0.246, Time = 4.17
+
+Frame 84 Data: X_meas = -0.039, Y_meas = -0.304, X_ref = -0.049, Y_ref = 0.245, Time = 4.22
+
+Frame 85 Data: X_meas = -0.042, Y_meas = -0.306, X_ref = -0.054, Y_ref = 0.244, Time = 4.27
+
+Frame 86 Data: X_meas = -0.047, Y_meas = -0.308, X_ref = -0.059, Y_ref = 0.243, Time = 4.32
+
+Frame 87 Data: X_meas = -0.050, Y_meas = -0.309, X_ref = -0.064, Y_ref = 0.242, Time = 4.37
+
+Frame 88 Data: X_meas = -0.054, Y_meas = -0.311, X_ref = -0.069, Y_ref = 0.240, Time = 4.42
+
+Frame 89 Data: X_meas = -0.058, Y_meas = -0.313, X_ref = -0.074, Y_ref = 0.239, Time = 4.47
+
+Frame 90 Data: X_meas = -0.062, Y_meas = -0.314, X_ref = -0.079, Y_ref = 0.237, Time = 4.52
+
+Frame 91 Data: X_meas = -0.066, Y_meas = -0.315, X_ref = -0.084, Y_ref = 0.236, Time = 4.57
+
+Frame 92 Data: X_meas = -0.070, Y_meas = -0.316, X_ref = -0.089, Y_ref = 0.234, Time = 4.62
+
+Frame 93 Data: X_meas = -0.074, Y_meas = -0.318, X_ref = -0.094, Y_ref = 0.232, Time = 4.67
+
+Frame 94 Data: X_meas = -0.078, Y_meas = -0.318, X_ref = -0.098, Y_ref = 0.230, Time = 4.72
+
+Frame 95 Data: X_meas = -0.081, Y_meas = -0.319, X_ref = -0.103, Y_ref = 0.228, Time = 4.77
+
+Frame 96 Data: X_meas = -0.085, Y_meas = -0.320, X_ref = -0.108, Y_ref = 0.225, Time = 4.82
+
+Frame 97 Data: X_meas = -0.088, Y_meas = -0.321, X_ref = -0.113, Y_ref = 0.223, Time = 4.87
+
+Frame 98 Data: X_meas = -0.092, Y_meas = -0.321, X_ref = -0.117, Y_ref = 0.221, Time = 4.92
+
+Frame 99 Data: X_meas = -0.095, Y_meas = -0.321, X_ref = -0.122, Y_ref = 0.218, Time = 4.97
+
+Frame 100 Data: X_meas = -0.099, Y_meas = -0.321, X_ref = -0.127, Y_ref = 0.216, Time = 5.02
+
+Frame 101 Data: X_meas = -0.102, Y_meas = -0.321, X_ref = -0.131, Y_ref = 0.213, Time = 5.07
+
+Frame 102 Data: X_meas = -0.105, Y_meas = -0.321, X_ref = -0.135, Y_ref = 0.210, Time = 5.12
+
+Frame 103 Data: X_meas = -0.108, Y_meas = -0.320, X_ref = -0.140, Y_ref = 0.207, Time = 5.17
+
+Frame 104 Data: X_meas = -0.112, Y_meas = -0.320, X_ref = -0.144, Y_ref = 0.204, Time = 5.22
+
+Frame 105 Data: X_meas = -0.114, Y_meas = -0.320, X_ref = -0.148, Y_ref = 0.201, Time = 5.27
+
+Frame 106 Data: X_meas = -0.117, Y_meas = -0.319, X_ref = -0.153, Y_ref = 0.198, Time = 5.32
+
+Frame 107 Data: X_meas = -0.120, Y_meas = -0.318, X_ref = -0.157, Y_ref = 0.195, Time = 5.37
+
+Frame 108 Data: X_meas = -0.123, Y_meas = -0.317, X_ref = -0.161, Y_ref = 0.192, Time = 5.42
+
+Frame 109 Data: X_meas = -0.126, Y_meas = -0.315, X_ref = -0.165, Y_ref = 0.188, Time = 5.47
+
+Frame 110 Data: X_meas = -0.128, Y_meas = -0.314, X_ref = -0.169, Y_ref = 0.185, Time = 5.52
+
+Frame 111 Data: X_meas = -0.131, Y_meas = -0.312, X_ref = -0.172, Y_ref = 0.181, Time = 5.57
+
+Frame 112 Data: X_meas = -0.133, Y_meas = -0.311, X_ref = -0.176, Y_ref = 0.177, Time = 5.62
+
+Frame 113 Data: X_meas = -0.134, Y_meas = -0.310, X_ref = -0.180, Y_ref = 0.174, Time = 5.67
+
+Frame 114 Data: X_meas = -0.137, Y_meas = -0.307, X_ref = -0.183, Y_ref = 0.170, Time = 5.72
+
+Frame 115 Data: X_meas = -0.139, Y_meas = -0.306, X_ref = -0.187, Y_ref = 0.166, Time = 5.77
+
+Frame 116 Data: X_meas = -0.141, Y_meas = -0.304, X_ref = -0.190, Y_ref = 0.162, Time = 5.82
+
+Frame 117 Data: X_meas = -0.143, Y_meas = -0.302, X_ref = -0.194, Y_ref = 0.158, Time = 5.87
+
+Frame 118 Data: X_meas = -0.144, Y_meas = -0.300, X_ref = -0.197, Y_ref = 0.154, Time = 5.92
+
+Frame 119 Data: X_meas = -0.146, Y_meas = -0.298, X_ref = -0.200, Y_ref = 0.150, Time = 5.97
+
+Frame 120 Data: X_meas = -0.148, Y_meas = -0.296, X_ref = -0.203, Y_ref = 0.146, Time = 6.02
+
+Frame 121 Data: X_meas = -0.150, Y_meas = -0.294, X_ref = -0.206, Y_ref = 0.141, Time = 6.07
+
+Frame 122 Data: X_meas = -0.152, Y_meas = -0.291, X_ref = -0.209, Y_ref = 0.137, Time = 6.12
+
+Frame 123 Data: X_meas = -0.154, Y_meas = -0.289, X_ref = -0.212, Y_ref = 0.132, Time = 6.17
+
+Frame 124 Data: X_meas = -0.156, Y_meas = -0.286, X_ref = -0.215, Y_ref = 0.128, Time = 6.22
+
+Frame 125 Data: X_meas = -0.158, Y_meas = -0.284, X_ref = -0.217, Y_ref = 0.123, Time = 6.27
+
+Frame 126 Data: X_meas = -0.161, Y_meas = -0.281, X_ref = -0.220, Y_ref = 0.119, Time = 6.32
+
+Frame 127 Data: X_meas = -0.163, Y_meas = -0.279, X_ref = -0.222, Y_ref = 0.114, Time = 6.37
+
+Frame 128 Data: X_meas = -0.165, Y_meas = -0.277, X_ref = -0.225, Y_ref = 0.110, Time = 6.42
+
+Frame 129 Data: X_meas = -0.167, Y_meas = -0.274, X_ref = -0.227, Y_ref = 0.105, Time = 6.47
+
+Frame 130 Data: X_meas = -0.169, Y_meas = -0.272, X_ref = -0.229, Y_ref = 0.100, Time = 6.52
+
+Frame 131 Data: X_meas = -0.171, Y_meas = -0.269, X_ref = -0.231, Y_ref = 0.095, Time = 6.57
+
+Frame 132 Data: X_meas = -0.173, Y_meas = -0.267, X_ref = -0.233, Y_ref = 0.090, Time = 6.62
+
+Frame 133 Data: X_meas = -0.174, Y_meas = -0.265, X_ref = -0.235, Y_ref = 0.086, Time = 6.67
+
+Frame 134 Data: X_meas = -0.176, Y_meas = -0.263, X_ref = -0.237, Y_ref = 0.081, Time = 6.72
+
+Frame 135 Data: X_meas = -0.178, Y_meas = -0.261, X_ref = -0.238, Y_ref = 0.076, Time = 6.77
+
+Frame 136 Data: X_meas = -0.180, Y_meas = -0.259, X_ref = -0.240, Y_ref = 0.071, Time = 6.82
+
+Frame 137 Data: X_meas = -0.182, Y_meas = -0.257, X_ref = -0.241, Y_ref = 0.066, Time = 6.87
+
+Frame 138 Data: X_meas = -0.184, Y_meas = -0.255, X_ref = -0.243, Y_ref = 0.060, Time = 6.92
+
+Frame 139 Data: X_meas = -0.185, Y_meas = -0.253, X_ref = -0.244, Y_ref = 0.055, Time = 6.97
+
+Frame 140 Data: X_meas = -0.187, Y_meas = -0.251, X_ref = -0.245, Y_ref = 0.050, Time = 7.02
+
+Frame 141 Data: X_meas = -0.189, Y_meas = -0.248, X_ref = -0.246, Y_ref = 0.045, Time = 7.07
+
+Frame 142 Data: X_meas = -0.191, Y_meas = -0.246, X_ref = -0.247, Y_ref = 0.040, Time = 7.12
+
+Frame 143 Data: X_meas = -0.193, Y_meas = -0.244, X_ref = -0.248, Y_ref = 0.035, Time = 7.17
+
+Frame 144 Data: X_meas = -0.194, Y_meas = -0.242, X_ref = -0.248, Y_ref = 0.030, Time = 7.22
+
+Frame 145 Data: X_meas = -0.196, Y_meas = -0.240, X_ref = -0.249, Y_ref = 0.024, Time = 7.27
+
+Frame 146 Data: X_meas = -0.197, Y_meas = -0.238, X_ref = -0.249, Y_ref = 0.019, Time = 7.32
+
+Frame 147 Data: X_meas = -0.198, Y_meas = -0.235, X_ref = -0.250, Y_ref = 0.014, Time = 7.37
+
+Frame 148 Data: X_meas = -0.199, Y_meas = -0.233, X_ref = -0.250, Y_ref = 0.009, Time = 7.42
+
+Frame 149 Data: X_meas = -0.199, Y_meas = -0.231, X_ref = -0.250, Y_ref = 0.003, Time = 7.47
+
+Frame 150 Data: X_meas = -0.200, Y_meas = -0.228, X_ref = -0.250, Y_ref = -0.002, Time = 7.52
+
+Frame 151 Data: X_meas = -0.200, Y_meas = -0.226, X_ref = -0.250, Y_ref = -0.007, Time = 7.57
+
+Frame 152 Data: X_meas = -0.201, Y_meas = -0.223, X_ref = -0.250, Y_ref = -0.012, Time = 7.62
+
+Frame 153 Data: X_meas = -0.201, Y_meas = -0.221, X_ref = -0.249, Y_ref = -0.017, Time = 7.67
+
+Frame 154 Data: X_meas = -0.201, Y_meas = -0.218, X_ref = -0.249, Y_ref = -0.023, Time = 7.72
+
+Frame 155 Data: X_meas = -0.201, Y_meas = -0.216, X_ref = -0.248, Y_ref = -0.028, Time = 7.77
+
+Frame 156 Data: X_meas = -0.200, Y_meas = -0.213, X_ref = -0.248, Y_ref = -0.033, Time = 7.82
+
+Frame 157 Data: X_meas = -0.200, Y_meas = -0.210, X_ref = -0.247, Y_ref = -0.038, Time = 7.87
+
+Frame 158 Data: X_meas = -0.199, Y_meas = -0.207, X_ref = -0.246, Y_ref = -0.043, Time = 7.92
+
+Frame 159 Data: X_meas = -0.199, Y_meas = -0.204, X_ref = -0.245, Y_ref = -0.049, Time = 7.97
+
+Frame 160 Data: X_meas = -0.198, Y_meas = -0.201, X_ref = -0.244, Y_ref = -0.054, Time = 8.02
+
+Frame 161 Data: X_meas = -0.197, Y_meas = -0.199, X_ref = -0.243, Y_ref = -0.059, Time = 8.07
+
+Frame 162 Data: X_meas = -0.196, Y_meas = -0.196, X_ref = -0.242, Y_ref = -0.064, Time = 8.12
+
+Frame 163 Data: X_meas = -0.194, Y_meas = -0.193, X_ref = -0.240, Y_ref = -0.069, Time = 8.17
+
+Frame 164 Data: X_meas = -0.193, Y_meas = -0.190, X_ref = -0.239, Y_ref = -0.074, Time = 8.22
+
+Frame 165 Data: X_meas = -0.191, Y_meas = -0.187, X_ref = -0.237, Y_ref = -0.079, Time = 8.27
+
+Frame 166 Data: X_meas = -0.190, Y_meas = -0.184, X_ref = -0.236, Y_ref = -0.084, Time = 8.32
+
+Frame 167 Data: X_meas = -0.187, Y_meas = -0.182, X_ref = -0.234, Y_ref = -0.089, Time = 8.37
+
+Frame 168 Data: X_meas = -0.186, Y_meas = -0.179, X_ref = -0.232, Y_ref = -0.094, Time = 8.42
+
+Frame 169 Data: X_meas = -0.183, Y_meas = -0.176, X_ref = -0.230, Y_ref = -0.098, Time = 8.47
+
+Frame 170 Data: X_meas = -0.181, Y_meas = -0.173, X_ref = -0.228, Y_ref = -0.103, Time = 8.52
+
+Frame 171 Data: X_meas = -0.179, Y_meas = -0.170, X_ref = -0.225, Y_ref = -0.108, Time = 8.57
+
+Frame 172 Data: X_meas = -0.176, Y_meas = -0.168, X_ref = -0.223, Y_ref = -0.113, Time = 8.62
+
+Frame 173 Data: X_meas = -0.173, Y_meas = -0.166, X_ref = -0.221, Y_ref = -0.117, Time = 8.67
+
+Frame 174 Data: X_meas = -0.170, Y_meas = -0.163, X_ref = -0.218, Y_ref = -0.122, Time = 8.72
+
+Frame 175 Data: X_meas = -0.167, Y_meas = -0.161, X_ref = -0.216, Y_ref = -0.127, Time = 8.77
+
+Frame 176 Data: X_meas = -0.164, Y_meas = -0.158, X_ref = -0.213, Y_ref = -0.131, Time = 8.82
+
+Frame 177 Data: X_meas = -0.161, Y_meas = -0.155, X_ref = -0.210, Y_ref = -0.135, Time = 8.87
+
+Frame 178 Data: X_meas = -0.157, Y_meas = -0.153, X_ref = -0.207, Y_ref = -0.140, Time = 8.92
+
+Frame 179 Data: X_meas = -0.154, Y_meas = -0.150, X_ref = -0.204, Y_ref = -0.144, Time = 8.97
+
+Frame 180 Data: X_meas = -0.151, Y_meas = -0.148, X_ref = -0.201, Y_ref = -0.148, Time = 9.02
+
+Frame 181 Data: X_meas = -0.148, Y_meas = -0.145, X_ref = -0.198, Y_ref = -0.153, Time = 9.07
+
+Frame 182 Data: X_meas = -0.145, Y_meas = -0.142, X_ref = -0.195, Y_ref = -0.157, Time = 9.12
+
+Frame 183 Data: X_meas = -0.141, Y_meas = -0.139, X_ref = -0.192, Y_ref = -0.161, Time = 9.17
+
+Frame 184 Data: X_meas = -0.138, Y_meas = -0.136, X_ref = -0.188, Y_ref = -0.165, Time = 9.22
+
+Frame 185 Data: X_meas = -0.134, Y_meas = -0.133, X_ref = -0.185, Y_ref = -0.169, Time = 9.27
+
+Frame 186 Data: X_meas = -0.131, Y_meas = -0.130, X_ref = -0.181, Y_ref = -0.172, Time = 9.32
+
+Frame 187 Data: X_meas = -0.127, Y_meas = -0.127, X_ref = -0.177, Y_ref = -0.176, Time = 9.37
+
+Frame 188 Data: X_meas = -0.124, Y_meas = -0.124, X_ref = -0.174, Y_ref = -0.180, Time = 9.42
+
+Frame 189 Data: X_meas = -0.120, Y_meas = -0.121, X_ref = -0.170, Y_ref = -0.183, Time = 9.47
+
+Frame 190 Data: X_meas = -0.117, Y_meas = -0.118, X_ref = -0.166, Y_ref = -0.187, Time = 9.52
+
+Frame 191 Data: X_meas = -0.114, Y_meas = -0.115, X_ref = -0.162, Y_ref = -0.190, Time = 9.57
+
+Frame 192 Data: X_meas = -0.110, Y_meas = -0.112, X_ref = -0.158, Y_ref = -0.194, Time = 9.62
+
+Frame 193 Data: X_meas = -0.107, Y_meas = -0.109, X_ref = -0.154, Y_ref = -0.197, Time = 9.67
+
+Frame 194 Data: X_meas = -0.103, Y_meas = -0.107, X_ref = -0.150, Y_ref = -0.200, Time = 9.72
+
+Frame 195 Data: X_meas = -0.100, Y_meas = -0.103, X_ref = -0.146, Y_ref = -0.203, Time = 9.77
+
+Frame 196 Data: X_meas = -0.096, Y_meas = -0.100, X_ref = -0.141, Y_ref = -0.206, Time = 9.82
+
+Frame 197 Data: X_meas = -0.093, Y_meas = -0.098, X_ref = -0.137, Y_ref = -0.209, Time = 9.87
+
+Frame 198 Data: X_meas = -0.090, Y_meas = -0.095, X_ref = -0.132, Y_ref = -0.212, Time = 9.92
+
+Frame 199 Data: X_meas = -0.086, Y_meas = -0.092, X_ref = -0.128, Y_ref = -0.215, Time = 9.97
+
+Frame 200 Data: X_meas = -0.083, Y_meas = -0.089, X_ref = -0.123, Y_ref = -0.217, Time = 10.02
+
+Frame 201 Data: X_meas = -0.079, Y_meas = -0.086, X_ref = -0.119, Y_ref = -0.220, Time = 10.07
+
+Frame 202 Data: X_meas = -0.075, Y_meas = -0.083, X_ref = -0.114, Y_ref = -0.222, Time = 10.12
+
+Frame 203 Data: X_meas = -0.072, Y_meas = -0.080, X_ref = -0.110, Y_ref = -0.225, Time = 10.17
+
+Frame 204 Data: X_meas = -0.069, Y_meas = -0.077, X_ref = -0.105, Y_ref = -0.227, Time = 10.22
+
+Frame 205 Data: X_meas = -0.065, Y_meas = -0.074, X_ref = -0.100, Y_ref = -0.229, Time = 10.27
+
+Frame 206 Data: X_meas = -0.062, Y_meas = -0.071, X_ref = -0.095, Y_ref = -0.231, Time = 10.32
+
+Frame 207 Data: X_meas = -0.058, Y_meas = -0.068, X_ref = -0.090, Y_ref = -0.233, Time = 10.37
+
+Frame 208 Data: X_meas = -0.055, Y_meas = -0.065, X_ref = -0.086, Y_ref = -0.235, Time = 10.42
+
+Frame 209 Data: X_meas = -0.051, Y_meas = -0.063, X_ref = -0.081, Y_ref = -0.237, Time = 10.47
+
+Frame 210 Data: X_meas = -0.048, Y_meas = -0.060, X_ref = -0.076, Y_ref = -0.238, Time = 10.52
+
+Frame 211 Data: X_meas = -0.044, Y_meas = -0.057, X_ref = -0.071, Y_ref = -0.240, Time = 10.57
+
+Frame 212 Data: X_meas = -0.040, Y_meas = -0.054, X_ref = -0.066, Y_ref = -0.241, Time = 10.62
+
+Frame 213 Data: X_meas = -0.037, Y_meas = -0.052, X_ref = -0.060, Y_ref = -0.243, Time = 10.67
+
+Frame 214 Data: X_meas = -0.033, Y_meas = -0.049, X_ref = -0.055, Y_ref = -0.244, Time = 10.72
+
+Frame 215 Data: X_meas = -0.029, Y_meas = -0.047, X_ref = -0.050, Y_ref = -0.245, Time = 10.77
+
+Frame 216 Data: X_meas = -0.025, Y_meas = -0.044, X_ref = -0.045, Y_ref = -0.246, Time = 10.82
+
+Frame 217 Data: X_meas = -0.021, Y_meas = -0.042, X_ref = -0.040, Y_ref = -0.247, Time = 10.87
+
+Frame 218 Data: X_meas = -0.017, Y_meas = -0.041, X_ref = -0.035, Y_ref = -0.248, Time = 10.92
+
+Frame 219 Data: X_meas = -0.013, Y_meas = -0.039, X_ref = -0.030, Y_ref = -0.248, Time = 10.97
+
+Frame 220 Data: X_meas = -0.009, Y_meas = -0.038, X_ref = -0.024, Y_ref = -0.249, Time = 11.02
+
+Frame 221 Data: X_meas = -0.005, Y_meas = -0.036, X_ref = -0.019, Y_ref = -0.249, Time = 11.07
+
+Frame 222 Data: X_meas = -0.001, Y_meas = -0.034, X_ref = -0.014, Y_ref = -0.250, Time = 11.12
+
+Frame 223 Data: X_meas = 0.003, Y_meas = -0.033, X_ref = -0.009, Y_ref = -0.250, Time = 11.17
+
+Frame 224 Data: X_meas = 0.007, Y_meas = -0.032, X_ref = -0.003, Y_ref = -0.250, Time = 11.22
+
+Frame 225 Data: X_meas = 0.011, Y_meas = -0.031, X_ref = 0.002, Y_ref = -0.250, Time = 11.27
+
+Frame 226 Data: X_meas = 0.014, Y_meas = -0.030, X_ref = 0.007, Y_ref = -0.250, Time = 11.32
+
+Frame 227 Data: X_meas = 0.018, Y_meas = -0.029, X_ref = 0.012, Y_ref = -0.250, Time = 11.37
+
+Frame 228 Data: X_meas = 0.022, Y_meas = -0.029, X_ref = 0.017, Y_ref = -0.249, Time = 11.42
+
+Frame 229 Data: X_meas = 0.026, Y_meas = -0.029, X_ref = 0.023, Y_ref = -0.249, Time = 11.47
+
+Frame 230 Data: X_meas = 0.030, Y_meas = -0.028, X_ref = 0.028, Y_ref = -0.248, Time = 11.52
+
+Frame 231 Data: X_meas = 0.034, Y_meas = -0.028, X_ref = 0.033, Y_ref = -0.248, Time = 11.57
+
+Frame 232 Data: X_meas = 0.037, Y_meas = -0.028, X_ref = 0.038, Y_ref = -0.247, Time = 11.62
+
+Frame 233 Data: X_meas = 0.041, Y_meas = -0.028, X_ref = 0.043, Y_ref = -0.246, Time = 11.67
+
+Frame 234 Data: X_meas = 0.045, Y_meas = -0.028, X_ref = 0.049, Y_ref = -0.245, Time = 11.72
+
+Frame 235 Data: X_meas = 0.049, Y_meas = -0.029, X_ref = 0.054, Y_ref = -0.244, Time = 11.77
+
+Frame 236 Data: X_meas = 0.052, Y_meas = -0.030, X_ref = 0.059, Y_ref = -0.243, Time = 11.82
+
+Frame 237 Data: X_meas = 0.056, Y_meas = -0.030, X_ref = 0.064, Y_ref = -0.242, Time = 11.87
+
+Frame 238 Data: X_meas = 0.059, Y_meas = -0.031, X_ref = 0.069, Y_ref = -0.240, Time = 11.92
+
+Frame 239 Data: X_meas = 0.063, Y_meas = -0.032, X_ref = 0.074, Y_ref = -0.239, Time = 11.97
+
+Frame 240 Data: X_meas = 0.067, Y_meas = -0.033, X_ref = 0.079, Y_ref = -0.237, Time = 12.02
+
+Frame 241 Data: X_meas = 0.070, Y_meas = -0.034, X_ref = 0.084, Y_ref = -0.236, Time = 12.07
+
+Frame 242 Data: X_meas = 0.074, Y_meas = -0.035, X_ref = 0.089, Y_ref = -0.234, Time = 12.12
+
+Frame 243 Data: X_meas = 0.077, Y_meas = -0.037, X_ref = 0.094, Y_ref = -0.232, Time = 12.17
+
+Frame 244 Data: X_meas = 0.080, Y_meas = -0.038, X_ref = 0.098, Y_ref = -0.230, Time = 12.22
+
+Frame 245 Data: X_meas = 0.083, Y_meas = -0.040, X_ref = 0.103, Y_ref = -0.228, Time = 12.27
+
+Frame 246 Data: X_meas = 0.086, Y_meas = -0.042, X_ref = 0.108, Y_ref = -0.225, Time = 12.32
+
+Frame 247 Data: X_meas = 0.089, Y_meas = -0.045, X_ref = 0.113, Y_ref = -0.223, Time = 12.37
+
+Frame 248 Data: X_meas = 0.092, Y_meas = -0.047, X_ref = 0.117, Y_ref = -0.221, Time = 12.42
+
+Frame 249 Data: X_meas = 0.095, Y_meas = -0.050, X_ref = 0.122, Y_ref = -0.218, Time = 12.47
+
+Frame 250 Data: X_meas = 0.098, Y_meas = -0.052, X_ref = 0.127, Y_ref = -0.216, Time = 12.52
+
+Frame 251 Data: X_meas = 0.100, Y_meas = -0.055, X_ref = 0.131, Y_ref = -0.213, Time = 12.57
+
+Frame 252 Data: X_meas = 0.103, Y_meas = -0.058, X_ref = 0.135, Y_ref = -0.210, Time = 12.62
+
+Frame 253 Data: X_meas = 0.106, Y_meas = -0.061, X_ref = 0.140, Y_ref = -0.207, Time = 12.67
+
+Frame 254 Data: X_meas = 0.108, Y_meas = -0.064, X_ref = 0.144, Y_ref = -0.204, Time = 12.72
+
+Frame 255 Data: X_meas = 0.111, Y_meas = -0.068, X_ref = 0.148, Y_ref = -0.201, Time = 12.77
+
+Frame 256 Data: X_meas = 0.114, Y_meas = -0.071, X_ref = 0.153, Y_ref = -0.198, Time = 12.82
+
+Frame 257 Data: X_meas = 0.116, Y_meas = -0.074, X_ref = 0.157, Y_ref = -0.195, Time = 12.87
+
+Frame 258 Data: X_meas = 0.119, Y_meas = -0.077, X_ref = 0.161, Y_ref = -0.192, Time = 12.92
+
+Frame 259 Data: X_meas = 0.121, Y_meas = -0.081, X_ref = 0.165, Y_ref = -0.188, Time = 12.97
+
+Frame 260 Data: X_meas = 0.124, Y_meas = -0.084, X_ref = 0.169, Y_ref = -0.185, Time = 13.02
+
+Frame 261 Data: X_meas = 0.127, Y_meas = -0.087, X_ref = 0.172, Y_ref = -0.181, Time = 13.07
+
+Frame 262 Data: X_meas = 0.130, Y_meas = -0.091, X_ref = 0.176, Y_ref = -0.177, Time = 13.12
+
+Frame 263 Data: X_meas = 0.132, Y_meas = -0.095, X_ref = 0.180, Y_ref = -0.174, Time = 13.17
+
+Frame 264 Data: X_meas = 0.135, Y_meas = -0.099, X_ref = 0.183, Y_ref = -0.170, Time = 13.22
+
+Frame 265 Data: X_meas = 0.138, Y_meas = -0.102, X_ref = 0.187, Y_ref = -0.166, Time = 13.27
+
+Frame 266 Data: X_meas = 0.141, Y_meas = -0.106, X_ref = 0.190, Y_ref = -0.162, Time = 13.32
+
+Frame 267 Data: X_meas = 0.144, Y_meas = -0.110, X_ref = 0.194, Y_ref = -0.158, Time = 13.37
+
+Frame 268 Data: X_meas = 0.147, Y_meas = -0.113, X_ref = 0.197, Y_ref = -0.154, Time = 13.42
+
+Frame 269 Data: X_meas = 0.149, Y_meas = -0.117, X_ref = 0.200, Y_ref = -0.150, Time = 13.47
+
+Frame 270 Data: X_meas = 0.152, Y_meas = -0.121, X_ref = 0.203, Y_ref = -0.146, Time = 13.52
+
+Frame 271 Data: X_meas = 0.155, Y_meas = -0.124, X_ref = 0.206, Y_ref = -0.141, Time = 13.57
+
+Frame 272 Data: X_meas = 0.158, Y_meas = -0.128, X_ref = 0.209, Y_ref = -0.137, Time = 13.62
+
+Frame 273 Data: X_meas = 0.161, Y_meas = -0.132, X_ref = 0.212, Y_ref = -0.132, Time = 13.67
+
+Frame 274 Data: X_meas = 0.163, Y_meas = -0.135, X_ref = 0.215, Y_ref = -0.128, Time = 13.72
+
+Frame 275 Data: X_meas = 0.166, Y_meas = -0.139, X_ref = 0.217, Y_ref = -0.123, Time = 13.77
+
+Frame 276 Data: X_meas = 0.169, Y_meas = -0.143, X_ref = 0.220, Y_ref = -0.119, Time = 13.82
+
+Frame 277 Data: X_meas = 0.172, Y_meas = -0.146, X_ref = 0.222, Y_ref = -0.114, Time = 13.87
+
+Frame 278 Data: X_meas = 0.175, Y_meas = -0.150, X_ref = 0.225, Y_ref = -0.110, Time = 13.92
+
+Frame 279 Data: X_meas = 0.178, Y_meas = -0.154, X_ref = 0.227, Y_ref = -0.105, Time = 13.97
+
+Frame 280 Data: X_meas = 0.180, Y_meas = -0.157, X_ref = 0.229, Y_ref = -0.100, Time = 14.02
+
+Frame 281 Data: X_meas = 0.183, Y_meas = -0.161, X_ref = 0.231, Y_ref = -0.095, Time = 14.07
+
+Frame 282 Data: X_meas = 0.185, Y_meas = -0.165, X_ref = 0.233, Y_ref = -0.090, Time = 14.12
+
+Frame 283 Data: X_meas = 0.187, Y_meas = -0.169, X_ref = 0.235, Y_ref = -0.086, Time = 14.17
+
+Frame 284 Data: X_meas = 0.189, Y_meas = -0.173, X_ref = 0.237, Y_ref = -0.081, Time = 14.22
+
+Frame 285 Data: X_meas = 0.191, Y_meas = -0.178, X_ref = 0.238, Y_ref = -0.076, Time = 14.27
+
+Frame 286 Data: X_meas = 0.193, Y_meas = -0.182, X_ref = 0.240, Y_ref = -0.071, Time = 14.32
+
+Frame 287 Data: X_meas = 0.195, Y_meas = -0.186, X_ref = 0.241, Y_ref = -0.066, Time = 14.37
+
+Frame 288 Data: X_meas = 0.196, Y_meas = -0.191, X_ref = 0.243, Y_ref = -0.060, Time = 14.42
+
+Frame 289 Data: X_meas = 0.197, Y_meas = -0.196, X_ref = 0.244, Y_ref = -0.055, Time = 14.47
+
+Frame 290 Data: X_meas = 0.198, Y_meas = -0.200, X_ref = 0.245, Y_ref = -0.050, Time = 14.52
+
+Frame 291 Data: X_meas = 0.199, Y_meas = -0.205, X_ref = 0.246, Y_ref = -0.045, Time = 14.57
+
+Frame 292 Data: X_meas = 0.200, Y_meas = -0.210, X_ref = 0.247, Y_ref = -0.040, Time = 14.62
+
+Frame 293 Data: X_meas = 0.201, Y_meas = -0.214, X_ref = 0.248, Y_ref = -0.035, Time = 14.67
+
+Frame 294 Data: X_meas = 0.202, Y_meas = -0.220, X_ref = 0.248, Y_ref = -0.030, Time = 14.72
+
+Frame 295 Data: X_meas = 0.203, Y_meas = -0.225, X_ref = 0.249, Y_ref = -0.024, Time = 14.77
+
+Frame 296 Data: X_meas = 0.203, Y_meas = -0.229, X_ref = 0.249, Y_ref = -0.019, Time = 14.82
+
+Frame 297 Data: X_meas = 0.203, Y_meas = -0.234, X_ref = 0.250, Y_ref = -0.014, Time = 14.87
+
+Frame 298 Data: X_meas = 0.203, Y_meas = -0.239, X_ref = 0.250, Y_ref = -0.009, Time = 14.92
+
+Frame 299 Data: X_meas = 0.203, Y_meas = -0.244, X_ref = 0.250, Y_ref = -0.003, Time = 14.97
+
+Frame 300 Data: X_meas = 0.202, Y_meas = -0.250, X_ref = 0.250, Y_ref = 0.002, Time = 15.02
+
+Frame 301 Data: X_meas = 0.202, Y_meas = -0.255, X_ref = 0.250, Y_ref = 0.007, Time = 15.07
+
+------------------------------ALL DATA PRINTED FOR THIS RUN------------------------------
