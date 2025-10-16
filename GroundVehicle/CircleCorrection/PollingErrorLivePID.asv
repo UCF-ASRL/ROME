@@ -3,14 +3,14 @@ close all
 clc
 
 %% --- Circle Parameters --- %%     
-R     = 0.25;               % radius [m]
+R     = 0.5;               % radius [m]
 T     = 15;                 % period [s]
 omega = (2*pi)/T;           % angular speed [rad/s]
 dt    = 0.05;               % MATLAB control step [s] (Arduino base step can be 0.10 s)
 numFrames = int16(T*(1/dt)) + 1;
 
 %% --- PID Parameters (need to be tuned) --- %%
-Kpx = 0.001;  Kdx = 0.0;  Kix = 0.000;  
+Kpx = 0.000;  Kdx = 0.000;  Kix = 0.000;  
 Kpy = Kpx;  Kdy = Kdx;  Kiy = Kix;
 
 %% --- Buffers --- %%
@@ -74,6 +74,8 @@ y_origin    = data.RigidBodies(1).y;
 time_origin = data.fTimestamp;
 frame_og    = data.iFrame;
 
+prev_x_cap = -(data.RigidBodies(1).x - x_origin - R);
+
 x(1) = R; y(1) = 0; time_s(1) = 0; %assuming starting at (R,0) and doing CCW circle
 
 %% --- PID State --- %%
@@ -103,19 +105,20 @@ for idx = 2:numFrames
     %pull all captured quaternions into matrix. Convert to eularian values
     %(yaw, pitch, roll) and save in eul_cap%
 
-    q_cap = [data.RigidBodies(1).qx, data.RigidBodies(1).qy, data.RigidBodies(1).qz, data.RigidBodies(1).qw];
-    eul_cap = [quat2eul(q_cap)];
-    yaw_cap = deg2rad(eul_cap(1))
+    q_cap = [data.RigidBodies(1).qw, data.RigidBodies(1).qx, data.RigidBodies(1).qy, data.RigidBodies(1).qz];
+    eul_cap = [quat2eul(q_cap, "XYZ")];
+    yaw_cap = (eul_cap(3));
+    fprintf('Yaw: %0.5f degrees\n', rad2deg(yaw_cap));
   
     x(idx) = x_cap;  y(idx) = y_cap; yaw(idx) = yaw_cap;
 
     % Console print (keep your style)
-    fprintf('Name:"%s"  ', model.RigidBody(1).Name);
-    fprintf('Frame #:"%d"  ', data.iFrame - frame_og);
-    fprintf('X:%0.1fmm  ', x_cap * 1000); %Motive sends data in Meters, this converts to mm
-    fprintf('Y:%0.1fmm  ', y_cap * 1000);
-    fprintf('Yaw:%0.1fmm  ', rad2deg(yaw_cap));
-    fprintf('T:%0.2f\n', t);
+    % fprintf('Name:"%s"  ', model.RigidBody(1).Name);
+    % fprintf('Frame #:"%d"  ', data.iFrame - frame_og);
+    % fprintf('X:%0.1fmm  ', x_cap * 1000); %Motive sends data in Meters, this converts to mm
+    % fprintf('Y:%0.1fmm  ', y_cap * 1000);
+    % fprintf('Yaw:%0.1fmm  ', rad2deg(yaw_cap));
+    % fprintf('T:%0.2f\n', t);
 
     %% --- Reference (circle) position & velocity --- %%
     % Keep center at (0,0) after zeroing originsframe_og
@@ -143,8 +146,8 @@ for idx = 2:numFrames
     prev_ex = ex;  prev_ey = ey;
 
     %% --- Combine --- %%
-    vx = vx_ref + vx_corr;
-    vy = vy_ref + vy_corr;
+    vx = vx_ref - vx_corr;
+    vy = vy_ref - vy_corr;
 
     %% --- Map to wheel speeds --- %%
     w_cmd_rads = InverseKinematics([vx; vy; yaw_cap]);

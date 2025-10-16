@@ -3,14 +3,14 @@ close all
 clc
 
 %% --- Circle Parameters --- %%     
-R     = 0.25;               % radius [m]
+R     = 0.5;               % radius [m]
 T     = 15;                 % period [s]
 omega = (2*pi)/T;           % angular speed [rad/s]
 dt    = 0.05;               % MATLAB control step [s] (Arduino base step can be 0.10 s)
 numFrames = int16(T*(1/dt)) + 1;
 
 %% --- PID Parameters (need to be tuned) --- %%
-Kpx = 0.005;  Kdx = 0.000;  Kix = 0.000;  
+Kpx = 0.000;  Kdx = 0.000;  Kix = 0.000;  
 Kpy = Kpx;  Kdy = Kdx;  Kiy = Kix;
 
 %% --- Buffers --- %%
@@ -103,9 +103,9 @@ for idx = 2:numFrames
     %pull all captured quaternions into matrix. Convert to eularian values
     %(yaw, pitch, roll) and save in eul_cap%
 
-    q_cap = [data.RigidBodies(1).qx, data.RigidBodies(1).qy, data.RigidBodies(1).qz, data.RigidBodies(1).qw];
-    eul_cap = [quat2eul(q_cap)];
-    yaw_cap = deg2rad(eul_cap(1));
+    q_cap = [data.RigidBodies(1).qw, data.RigidBodies(1).qx, data.RigidBodies(1).qy, data.RigidBodies(1).qz];
+    eul_cap = [quat2eul(q_cap, "XYZ")];
+    yaw_cap = (eul_cap(3));
     fprintf('Yaw: %0.5f degrees\n', rad2deg(yaw_cap));
   
     x(idx) = x_cap;  y(idx) = y_cap; yaw(idx) = yaw_cap;
