@@ -1,6 +1,5 @@
 clear all
 close all
-clc
 
 %% --- Circle Parameters --- %%     
 R     = 0.5;               % radius [m]
@@ -10,7 +9,7 @@ dt    = 0.05;               % MATLAB control step [s] (Arduino base step can be 
 numFrames = int16(T*(1/dt)) + 1;
 
 %% --- PID Parameters (need to be tuned) --- %%
-Kpx = 0.000;  Kdx = 0.000;  Kix = 0.000;  
+Kpx = 0.025;  Kdx = 0.015;  Kix = 0.006;  
 Kpy = Kpx;  Kdy = Kdx;  Kiy = Kix;
 
 %% --- Buffers --- %%
@@ -23,6 +22,10 @@ ey_log  = zeros(1,numFrames);
 xr_log  = zeros(1,numFrames);
 yr_log  = zeros(1,numFrames);
 wcmd_log = zeros(numFrames,4);
+vx_ref_log = zeros(1,numFrames);
+vy_ref_log = zeros(1,numFrames);
+vx_cap_log = zeros(1,numFrames);
+vy_cap_log = zeros(1,numFrames);
 
 clc;
 
@@ -74,7 +77,8 @@ y_origin    = data.RigidBodies(1).y;
 time_origin = data.fTimestamp;
 frame_og    = data.iFrame;
 
-prev_x_cap = -(data.RigidBodies(1).x - x_origin - R);
+x_cap_prev = -(data.RigidBodies(1).x - x_origin - R);
+y_cap_prev = -(data.RigidBodies(1).y - y_origin);
 
 x(1) = R; y(1) = 0; time_s(1) = 0; %assuming starting at (R,0) and doing CCW circle
 
@@ -131,10 +135,21 @@ for idx = 2:numFrames
     vx_ref = -R*omega*sin(omega*t);
     vy_ref =  R*omega*cos(omega*t);
 
+    vx_ref_log(idx) = vx_ref; vy_ref_log(idx) = vy_ref;
+
+    %% Calculate velocity
+    vx_cap = (x_cap - x_cap_prev)/dt;
+    vy_cap = -(y_cap - y_cap_prev)/dt;
+
+    vx_cap_log(idx) = vx_cap; vy_cap_log(idx) = vy_cap;
+
     %% --- Error --- %%
-    ex = (x_ref - x_cap)/dt;
-    ey = (y_ref - y_cap)/dt;
-    ex_log(idx) = ex;  ey_log(idx) = ey;
+    % ex = (x_ref - x_cap)/dt;
+    % ey = (y_ref - y_cap)/dt;
+    % ex_log(idx) = ex;  ey_log(idx) = ey;
+
+    ex = vx_ref - vx_cap;
+    ey = vy_ref - vy_cap;
 
     %% --- PID correction velocities (m/s) --- %%
     int_ex = int_ex + ex*dt;
@@ -146,8 +161,8 @@ for idx = 2:numFrames
     prev_ex = ex;  prev_ey = ey;
 
     %% --- Combine --- %%
-    vx = vx_ref - vx_corr;
-    vy = vy_ref - vy_corr;
+    vx = vx_ref + vx_corr;
+    vy = vy_ref + vy_corr;
 
     %% --- Map to wheel speeds --- %%
     w_cmd_rads = InverseKinematics([vx; vy; yaw_cap]);
@@ -158,6 +173,11 @@ for idx = 2:numFrames
     
     msg = sprintf('%.2f,%.2f,%.2f,%.2f', w_cmd_rpm(1), w_cmd_rpm(2), w_cmd_rpm(3), w_cmd_rpm(4));
     writeline(bt, msg);
+
+    %% Set previous position
+    x_cap_prev = x_cap;
+    y_cap_prev = y_cap;
+
 end
 writeline(bt, '0,0,0,0');
 clear bt;
@@ -241,3 +261,24 @@ ylim([ylim_current(1) - y_buffer, ylim_current(2) + y_buffer]);
 % xlabel('Time (sec)')
 % ylabel('Wheel Speed (RPM)')
 % legend({'Wheel 1','Wheel 2', 'Wheel 3', 'Wheel 4'},'Location','southwest')
+
+% Plot commanded vs tracked body velocities
+figure;
+hold on
+plot(time_s, vx_ref_log(:), 'b', 'LineWidth', 4)
+plot(time_s, vx_cap_log(:), 'r', 'LineWidth', 2)
+hold off
+title('Commanded vs Tracked X-Velocity')
+xlabel('Time (sec)')
+ylabel('x velocity (m/s)')
+legend({'Commanded','Tracked'},'Location','southwest')
+
+figure;
+hold on
+plot(time_s, vy_ref_log(:), 'b', 'LineWidth', 4)
+plot(time_s, vy_cap_log(:), 'r', 'LineWidth', 2)
+hold off
+title('Commanded vs Tracked Y-Velocity')
+xlabel('Time (sec)')
+ylabel('y velocity (m/s)')
+legend({'Commanded','Tracked'},'Location','southwest')
