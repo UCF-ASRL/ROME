@@ -1,13 +1,22 @@
 close all
 
+%Based on this research paper: https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=1244061
+
+%Arduino Mega functions as inner loop controller using a PI loop to correct
+%motor velocities to meet commanded velocities
+% Kp = 0.190 Ki = 0.125 on Arduino
+
+
 %% --- Circle Parameters --- %%     
 R     = 0.5;               % radius [m]
 T     = 15;                 % period [s]
 omega = (2*pi)/T;           % angular speed [rad/s]
-dt    = 0.05;               % MATLAB control step [s] (Arduino base step can be 0.10 s)
+dt    = 0.05;               % MATLAB control step [s]
 numFrames = int16(T*(1/dt)) + 1;
 
 %% --- Buffers --- %%
+err = 0;
+rel_err = 0;
 x       = zeros(1,numFrames); 
 y       = zeros(1,numFrames);
 yaw     = zeros(1,numFrames);
@@ -69,24 +78,19 @@ y_origin    = data.RigidBodies(1).y;
 time_origin = data.fTimestamp;
 frame_og    = data.iFrame;
 
-x_cap_prev = -(data.RigidBodies(1).x - x_origin - R);
-y_cap_prev = -(data.RigidBodies(1).y - y_origin);
-
-x(1) = R; y(1) = 0; time_s(1) = 0; %assuming starting at (R,0) and doing CCW circle
-
-%% --- PID State --- %%
-prev_ex = 0; prev_ey = 0;
-int_ex  = 0; int_ey  = 0;
+% x(1) = R; y(1) = 0; time_s(1) = 0; %assuming starting at (R,0) and doing CCW circle
 
 %% --- Main Control Loop --- %%
 t0 = tic;
-for idx = 2:numFrames
+for idx = 1:numFrames
 
-    while toc(t0) < dt
+    if idx ~= 1
+        while toc(t0) < dt
         %wait until dt passed%
-    end 
+        end 
+    end
 
-    t0 = tic;
+t0 = tic;
 
     data = natnetclient.getFrame;
 
@@ -104,23 +108,32 @@ for idx = 2:numFrames
     q_cap = [data.RigidBodies(1).qw, data.RigidBodies(1).qx, data.RigidBodies(1).qy, data.RigidBodies(1).qz];
     eul_cap = [quat2eul(q_cap, "XYZ")];
     yaw_cap = (eul_cap(3));
-    fprintf('Yaw: %0.5f degrees\n', rad2deg(yaw_cap));
+    % fprintf('Yaw: %0.5f degrees\n', rad2deg(yaw_cap));
   
     x(idx) = x_cap;  y(idx) = y_cap; yaw(idx) = yaw_cap;
 
-    % Console print (keep your style)
-    fprintf('Name:"%s"  ', model.RigidBody(1).Name);
-    fprintf('Frame #:"%d"  ', data.iFrame - frame_og);
-    fprintf('X:%0.1fmm  ', x_cap * 1000); %Motive sends data in Meters, this converts to mm
-    fprintf('Y:%0.1fmm  ', y_cap * 1000);
-    fprintf('Yaw:%0.1fmm  ', rad2deg(yaw_cap));
-    fprintf('T:%0.2f\n', t);
+    % % % Console print (keep your style)
+    % fprintf('Name:"%s"  ', model.RigidBody(1).Name);
+    % fprintf('Frame #:"%d"  ', data.iFrame - frame_og);
+    % fprintf('X:%0.1fmm  ', x_cap); %Motive sends data in Meters, this converts to mm
+    % fprintf('Y:%0.1fmm  ', y_cap);
+    % fprintf('Yaw:%0.1fdeg  ', rad2deg(yaw_cap));
+    % fprintf('T:%0.2f\n', t);
 
     %% --- Reference (circle) position & velocity --- %%
     % Keep center at (0,0) after zeroing originsframe_og
     x_ref = (R*cos(omega*t)); 
     y_ref = (R*sin(omega*t));
     xr_log(idx) = x_ref;  yr_log(idx) = y_ref;
+
+    %% Set previous position
+    x_cap_prev = x_cap;
+    y_cap_prev = y_cap;
+
+    % Calculate velocity
+    dx = (x_cap - x_cap_prev);
+    dy = (y_cap - y_cap_prev);
+    ds = sqrt(dx^2 + dy^2);
 
     % Reference body velocities for ROME path
     vx_ref = -R*omega*sin(omega*t);
@@ -130,11 +143,17 @@ for idx = 2:numFrames
     %% --- Error --- %%
     ex = x_ref - x_cap;
     ey = y_ref - y_cap;
+
+    %% --- Relative Error (%) --- %%
+    ref_dist = sqrt(x_ref^2 + y_ref^2);
+    err = sqrt(ex^2 + ey^2);
+    abs_err = abs_err + err * ds;
+    rel_err = rel_err + (abs(ref_dist - err)/ref_dist);
     ex_log(idx) = ex;  ey_log(idx) = ey;
     Err = [ex ; ey ; 0];  %%zero in yaw spot to represent no corrections along this DOF yet
 
     %% --- PID correction velocities (m/s) --- %%
-    Kp1 = 0.000;   Ki1 = 0.000;
+    Kp1 = 0.0100;   Ki1 = 0.0090;
     Vcorr = (-Kp1 * Err) + (-Ki1 * (Err * dt));
 
     %% --- Combine Ref w/ Corr --- %%
@@ -152,9 +171,12 @@ for idx = 2:numFrames
  
 end
 writeline(bt, '0,0,0,0');
-pause(0.01);
+pause(0.1);
 writeline(bt, '!,!,!,!'); %used to reset Arduino
+pause(0.1);
 clear bt;
+
+% fprintf("\nRelative Error: %.4f \t Absolute Error: %.4f\n", rel_err/(T/dt), abs_err);
 
 
 %% --------------------- PRINT SECTIONS --------------------- %%
@@ -186,9 +208,6 @@ for j = 1:numRows
     fprintf(fid, 'Frame %d Data: ', j);
     fprintf(fid, 'X_meas = %.3f, Y_meas = %.3f, X_ref = %.3f, Y_ref = %.3f, Time = %.2f\n\n', ...
             x(j), y(j), xr_log(j), yr_log(j), time_s(j));
-    if j == numRows
-        fprintf(fid,'------------------------------ALL DATA PRINTED FOR THIS RUN------------------------------');
-    end
 end
 fclose(fid);
 
@@ -208,6 +227,12 @@ figure;
 hold on;
 plot(xr_log, yr_log, 'b', 'LineWidth', 2)
 plot(x, y, 'r', 'LineWidth', 2)
+
+% --- FIX: Use sprintf to create the formatted subtitle string ---
+sub_text = sprintf('Relative Error: %.3f%% \t Absolute Error: %.3fm^2', 100 * rel_err/(T/dt), abs_err);
+subtitle(sub_text);
+% -------------------------------------------------------------------
+
 title('Commanded vs Tracked Position')
 xlabel('x pos (m)')
 ylabel('y pos (m)')
@@ -215,7 +240,6 @@ legend({'Commanded','Tracked'},'Location','southwest')
 axis square
 axis equal
 hold off
-
 % Add 10 percent padding to plot
 xlim_current = xlim;
 ylim_current = ylim;
@@ -224,7 +248,7 @@ y_buffer = (ylim_current(2) - ylim_current(1)) * 0.1;
 xlim([xlim_current(1) - x_buffer, xlim_current(2) + x_buffer]);
 ylim([ylim_current(1) - y_buffer, ylim_current(2) + y_buffer]);
 
-% Plot commanded wheel speeds
+% % Plot commanded wheel speeds
 % figure;
 % hold on;
 % plot(time_s, wcmd_log(:, 1).', 'b', 'LineWidth', 2)
