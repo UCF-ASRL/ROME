@@ -13,17 +13,17 @@
 #define READ 0x07
 #define SET 0x08
 #define READ_ALL 0x09
-int x = 4;
+int x = 0;
 PacketSerial packetizer;
 
 //Initialize encoder object
 Encoder encoders[] = {
   Encoder(14,15),
   Encoder(16,17),
-  Encoder(18,19),
+  Encoder(19,18),
+  Encoder(0,0),
   Encoder(20,21),
-  Encoder(22,23),
-  Encoder(24,25)
+  Encoder(23,22)
 };
 
 // Expressed in Joint frame
@@ -102,7 +102,7 @@ void setup()
   steppers[x].setSpeed(500);
 }
 void loop() {
-steppers[x].moveTo(5000);
+steppers[x].moveTo(2000);
 steppers[x].run();
 Serial.println(encoders[x].read());
 }

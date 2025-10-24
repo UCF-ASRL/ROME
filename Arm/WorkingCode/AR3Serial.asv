@@ -141,18 +141,18 @@ classdef AR3Serial
         function [] = updateStates(obj,statesArray)
             CMD = obj.UPDATE_STATES;
             
-            % for i = 1:6
-            %     if (statesArray(i) <= obj.CCWLimit(i))
-            %         statesArray(i) = obj.CCWLimit(i);
-            %         disp(statesArray(i))
-            %     elseif (statesArray(i) >= obj.CWLimit(i))
-            %         statesArray(i) = obj.CWLimit(i);
-            %     end
-            %     % Convert position to steps
-            %     statesArray(i) = statesArray(i) * obj.STEPPER_CONSTANTS_DEG(i);
-            %     % Convert velocity to steps
-            %     statesArray(i+6) = statesArray(i+6) * obj.STEPPER_CONSTANTS_DEG(i);
-            % end
+            for i = 1:6
+                if (statesArray(i) <= obj.CCWLimit(i))
+                    statesArray(i) = obj.CCWLimit(i);
+                    disp(statesArray(i))
+                elseif (statesArray(i) >= obj.CWLimit(i))
+                    statesArray(i) = obj.CWLimit(i);
+                end
+                % Convert position to steps
+                statesArray(i) = statesArray(i) * obj.STEPPER_CONSTANTS_DEG(i);
+                % Convert velocity to steps
+                statesArray(i+6) = statesArray(i+6) * obj.STEPPER_CONSTANTS_DEG(i);
+            end
             
             
             posArray = int32(statesArray(1:6));

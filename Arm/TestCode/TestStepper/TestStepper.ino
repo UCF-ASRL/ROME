@@ -6,7 +6,7 @@
 // Pin assignments for DM542T
 #define STEP_PIN 0  // PUL
 #define DIR_PIN 1   // DIR
-float countstep = 20.48; //counts/step
+float countstep = 10.12; //counts/step
 int x = 0;
 Encoder encoders[] = {
   Encoder(14,15),
@@ -31,7 +31,7 @@ void setup() {
   // Initial movement target
   stepper.moveTo(1000);
 }
-/*
+
 void loop() {
   // If at target, reverse direction
   if (stepper.distanceToGo() == 0) {
@@ -45,8 +45,8 @@ void loop() {
   // Step motor towards target
   stepper.run();
 }
-*/
 
+/*
 void loop() {
   if (Serial.available() > 0) {
     String input = Serial.readStringUntil('\n');
@@ -67,7 +67,7 @@ void loop() {
         long actual = encoderval/countstep;
         long error = targetsteps - actual;
         
-        if(abs(error) < 10){
+        if(abs(error) < .01){
           break;
         }
         stepper.setSpeed(500);
@@ -82,12 +82,13 @@ void loop() {
         steppers[x].run();
       }
 */
-
+/*
       Serial.println("Position reached.");
       float pos = encoders[x].read();
       Serial.print("Encoder Position is:");
-      Serial.print(pos*countstep);
+      Serial.print(pos/countstep);
       Serial.print(" steps Or ");
     }
   }
 }
+*/

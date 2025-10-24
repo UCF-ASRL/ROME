@@ -13,6 +13,16 @@
 #define READ 0x07
 #define SET 0x08
 #define READ_ALL 0x09
+#define encTol .11 //tolerance encoderRunToVal must reach i.e error must be less than encTol steps
+#define encOffset .12 //offset from encoder readings to cw/ccwtest was around .12
+
+//Selected motor speeds
+int maxSpeed = 1500;
+int calspeed = 1500;
+int maxAccel = 500;
+int runSpeed = 1500;
+//Calculated encoder count per motor step
+float countstep[6] = {20.48, 20.48, 20.48, 20.48, 20.48, 20.48}; 
 
 PacketSerial packetizer;
 
@@ -21,9 +31,9 @@ Encoder encoders[] = {
   Encoder(14,15),
   Encoder(17,16),
   Encoder(18,19),
-  Encoder(20,21),
-  Encoder(22,23),
-  Encoder(24,25)
+  Encoder(1000,1000),
+  Encoder(21,20),
+  Encoder(22,23)
 };
 
 // Number of steppers
@@ -34,31 +44,21 @@ int posMode = 0;
 long steps[6] = {0,0,0,0,0,0}; 
 float stepsSec[6] = {0.0,0.0,0.0,0.0,0.0,0.0};
 
-// Steps per Deg for each motor
-float stepsDeg[6] = {1/(.022368421*2),1/.018082192,
-                     1/.017834395,1/.021710526,
-                     1/.045901639,1/.046792453};
-//Uses ar3 motor values
-/*
-float stepsDeg[6] = {1/(.018),1/.036,
-                     1/.036,1/.021710526,
-                     1/1.8,1/1.8};
-*/
 //Ar2 motor values
-//float stepsDeg[6] = {44.70833342, 0, 0, 0, 0, 0};
-//float gearRat[6] = {.082840775, 1, 1, 1, 1, 1}; //from motor to output, multiply. from output to motor, divide
-float d2r = 3.14159/180;
-// Limits of each joint, degrees from zero. Expressed in Motor frame.
-// J2,J3,and J5 reversed here. Old Limits
-//float limits[6] = {-170.0,132.0,-141.0,-155.0,105.0,-155.0};
-//float limits[6] = {-170, 0, 0, 155, 105, 155};
-float limits[6] = {-170, 0, 1, -164, 104, 148};
-//Limits for arm pointing up
-//float limits[6] = {-170.0,42.5,-144.0,-155.0,86.5,155.0};
-//float limits[6] = {-180.0,42.5,-145.0,-155.0,86.5,155.0};
-
+//Steps input to angle output(includes mechanical ratios, microstepping etc.)
+//See Step Angle Troubleshooting excel file for calculations
+float stepsDeg[6] = {44.44444444, 55.55555556, 55.55555556, 46.66666667, 10, 20};
+float limits[6] = {-180, 132, 141, -165, 90, 180}; //Limits in direction of limit switch(NOT ccw or cw limits... see step angle troubleshooting sheet);
+float otherLimits[6] = {160, 0, 1, 165, -90, -170}; //Non limit-switched limits 
+//holds negative rotation values for some motors => Motor direction depends on wiring order of A+ A-, B+ and B-. 
+//Only change if wiring from stepper to stepper driver changes.
+int negspeeds[6] = {1, -1, 1, 1, -1, -1};
+//Arbitrary starting position.
+int startpos[6] = {0, 90, 2, 1, 0, 0};
 // Assign pin numbers to stepper
 byte pinNumbers[6][2] = {{0,1},{2,3},{4,5},{6,7},{8,9},{10,11}};
+//False if motor is uncalibrated, True if calibrated
+bool calibrated[6] = {false, false, false, false, false, false};
 
 class LimitSwitch{
   public:
@@ -270,7 +270,7 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
 }
 
 void updateSteppers()
-{
+{/*
   int reversed;
 
   if (posMode == 1)
@@ -290,14 +290,31 @@ void updateSteppers()
       steppers[i].setMaxSpeed(abs(stepsSec[i]));
       steppers[i].setAcceleration(500); // Smooth acceleration
       steppers[i].run();
-    
+      
+      encoderRunToVal(i,steps[i],)
+    } 
+
     }
-  }
   else
   {
     for (int i = 0;i < 6;i++)
       //steppers[i].runSpeed();
       steppers[i].run();
+  }
+    */
+  for (int i=0;i<6;i++){
+    bool targetReached = false;
+    int path = ValidateTraj(i,steps[i]/stepsDeg[i]);
+      if (path == 2) {
+        continue;
+      }
+
+    encoderRunToVal(i, steps[i], path);
+
+    if(abs(encoders[i].read()/countstep[i]/stepsDeg[i]-steps[i]/stepsDeg[i])<encTol*2) {
+      targetReached = true;
+      Serial.println("Target Reached");
+    }
   }
 }
 
@@ -341,72 +358,211 @@ void updateSteppersToleranced()
 void calibrate() {
   for(int i = 0;i < 6;i++){
       
-        if(i == 3) continue;
-        // Check for reversed action
-        if ((i == 0)  || (i==2)){//|| (i == 2)) { //((i == 1) || (i == 2)) || (i == 5){
-          
-          steppers[i].setSpeed(-500);
-          //Move each motor to limit switch(with debounce) and then set limits.
-          Serial.print("Running motor to limit:");
-          Serial.println(i);
-          while (true) {
-            steppers[i].runSpeed();
-            if ((digitalRead(LS[i].pin) == LOW) && (millis() - lastDebounce[i] > debounceTime)) {
-              lastDebounce[i] = millis();
-              break;
-            }
-          }
-          Serial.println("Limit found. Setting limit now.");
-          // Set current position in Motor frame 
-          steppers[i].setCurrentPosition((long)(limits[i]*stepsDeg[i]));
-          encoders[i].write((long)(limits[i]*stepsDeg[i]));
-          // If reversed, must transform to Joint frame
-          steps[i] = -(long)(limits[i]*stepsDeg[i]);
-          steppers[i].moveTo(-135*stepsDeg[i]);
-          if (i==2) {
-            steppers[i].moveTo(120*stepsDeg[i]);
-          }
-          steppers[i].setMaxSpeed(1000);
-          steppers[i].setAcceleration(500); // Smooth acceleration
-          steppers[i].runToPosition();
+    if(i == 3 || i == 4) continue;
+      // Check for reversed action
+      steppers[i].setSpeed(-calspeed*negspeeds[i]);
+      //Move each motor to limit switch(with debounce) and then set limits.
+      Serial.print("Running motor to limit:");
+      Serial.println(limits[i]);
+      while (true) {
+        steppers[i].runSpeed();
+        if ((digitalRead(LS[i].pin) == LOW) && (millis() - lastDebounce[i] > debounceTime)) {
+          lastDebounce[i] = millis();
+          break;
         }
-        
-        else{
-          steppers[i].setSpeed(500);
-          //Move each motor to limit switch and then set limits.
-          Serial.print("Running motor to limit:");
-          Serial.println(i);
-          while (true) {
-            steppers[i].runSpeed();
-            if ((digitalRead(LS[i].pin) == LOW) && (millis() - lastDebounce[i] > debounceTime)) {
-              lastDebounce[i] = millis();
-              break;
-            }
-          }
-          Serial.println("Limit found. Setting limit now.");
-          // Set current position in Motor frame 
-          steppers[i].setCurrentPosition((long)(limits[i]*stepsDeg[i]));
-          encoders[i].write((long)(limits[i]*stepsDeg[i]));
-          // If reversed, must transform to Joint frame
-          steps[i] = (long)(limits[i]*stepsDeg[i]);
-          steppers[i].moveTo(0);
-          if (i==1) {
-            //steppers[i].moveTo(42.5*stepsDeg[i]);
-          }
-          steppers[i].setMaxSpeed(1000);
-          steppers[i].setAcceleration(500); // Smooth acceleration
-          steppers[i].runToPosition();
-        }
-        stepsSec[i] = 0.0;
-      
       }
+      Serial.println("Limit found. Setting limit now.");
+      // Set current position in Motor frame 
+      steppers[i].setCurrentPosition((long)(limits[i]*stepsDeg[i]));
+      encoders[i].write((long)(limits[i]*stepsDeg[i]*countstep[i]));
+      // If reversed, must transform to Joint frame
+      steps[i] = -(long)(limits[i]*stepsDeg[i]);
+      encoderRunToVal(i, startpos[i]*stepsDeg[i], 3);
+      /*if(abs(encoders[i].read()/countstep[i]/stepsDeg[i]-startpos[i])<encTol*2) {
+        Serial.print("Output angle is ");
+        Serial.print(encoders[i].read()/countstep[i]/stepsDeg[i]);
+        Serial.print("degrees or "); 
+        Serial.print(encoders[i].read()/countstep[i]);
+        Serial.println("steps.");
+        calibrated[i] = true;
+        Serial.println("Starting position achieved");
+      } */
+    }
 }
-//transforms desired output angles of robot to input angles of motors using gear ratios and steps/deg
-//ex: if you want the base to rotate 90 degrees(theta_out), multiply by stepDeg to get phi_out(step_out)
-//then divide by the gear ratio to get the number of steps the motor must turn to make that happen(step_mot)  h
-void accelTransform(int theta_out[5], int stepDeg[5], int gearRat[5]){
-  for(int i=0;i<6;i++){
-    //step_mot = theta_out[i]*stepDeg[i]/gearRat[i];
+
+void encoderRunToVal(int x, float targetSteps, int path) {
+  //float encTol = .01;
+  while(true) {
+    long encoderVal = encoders[x].read();
+     //Converts encoder reading from counts to steps.
+    long actual = encoderVal/countstep[x];// In steps
+    long error = targetSteps - actual; // In steps
+      
+    //error variable holds the location data and corrects for any incorrections from the motor
+    //if error < limit the position has been reached
+    // if error > limit the motor will continue to move to the desired location which is current plus error
+    if(abs(error) < encTol){
+      break;
+    }
+        
+    steppers[x].setAcceleration(maxAccel);
+    if(x!=2){
+      if (path == 3){
+        steppers[x].setSpeed(runSpeed*negspeeds[x]);
+      } else if (path == 0) {
+        steppers[x].setSpeed(-runSpeed*negspeeds[x]);//-
+      } else if (path == 1) {
+        steppers[x].setSpeed(runSpeed*negspeeds[x]);//+
+      } else {
+        return;
+      }
+    } else if(x == 2){
+        if (path == 3){
+          steppers[x].setSpeed(runSpeed*negspeeds[x]);
+      } else if (path == 0) {
+          steppers[x].setSpeed(runSpeed*negspeeds[x]);//-
+      } else if (path == 1) {
+          steppers[x].setSpeed(-runSpeed*negspeeds[x]);//+
+      } else {
+        return;
+      }
+    }
+    steppers[x].moveTo(encoders[x].read()/countstep[x] + error);
+    steppers[x].run();
+    //Serial.println(encoders[x].read());
   }
 }
 
+int ValidateTraj(int x, float deg){
+  //Change resolution of trajectory
+  float step = encTol; //Can find a path within .1 deg
+  float tol = 2*step; //Atleast 2*step
+
+  //Ensure input is within limits
+  if ((deg < limits[x] && deg > otherLimits[x]) || (deg > limits[x] && deg < otherLimits[x])){
+    
+  } else {
+    Serial.println("Input is out of range. Please select another value.");
+    return 2;
+  }
+  //so limits arent overwritten:
+  int intermediate = 0;
+  int vlimit = limits[x];
+  int votherLimit = otherLimits[x];
+  //flip limits so following path works for all motors 
+  /*
+  if (negspeeds[x] < 0) { 
+    intermediate = vlimit;
+    vlimit = votherLimit;
+    votherLimit = intermediate;
+  }
+  */
+  //Ensure path stays within limits
+  float cwtest = encoders[x].read()/countstep[x]/stepsDeg[x]; //Consistently getting an offset of encoder values from previous reading to cw/ccwtest
+  float ccwtest = encoders[x].read()/countstep[x]/stepsDeg[x]; //encOffset should fix
+  //If path = 0, take counterclockwise path, if path = 1, take clockwise path, if path = 2 Don't move
+  int path = 2;
+  //Serial.println(cwtest);
+  //Serial.println(ccwtest);
+  /*
+  if ((abs(cwtest-deg) < encTol) || (abs(ccwtest-deg) < encTol)){
+    Serial.println("Angle is already within tolerance of target");
+    return 2;
+  }
+  */
+  while ((betweenPoints(vlimit, votherLimit, cwtest) == true) || (betweenPoints(vlimit, votherLimit, ccwtest) == true)){
+      if (betweenPoints(vlimit,votherLimit,cwtest) == false) { //(cwtest>votherLimit || cwtest<vlimit)
+        Serial.println("Clockwise path is out of bounds");
+        //Serial.println(cwtest);
+        path = 2; 
+        cwtest = 1000; //traps cwtest from reentering valid range 
+        
+      }
+      if (betweenPoints(vlimit,votherLimit,ccwtest) == false) { //(ccwtest>votherLimit || ccwtest<vlimit)
+        Serial.println("Counterclockwise path is out of bounds");
+        path = 2; 
+        ccwtest = 1000; //traps ccwtest from reentering valid range 
+        
+      }
+      if ((abs(cwtest - deg) < tol) && (betweenPoints(vlimit, deg, cwtest) == false)) {
+        /*
+        Serial.println(vlimit);
+        Serial.println(deg);
+        Serial.println(cwtest);
+        Serial.println(abs(cwtest - deg));
+        Serial.println(betweenPoints(vlimit, deg, cwtest));
+        */
+        Serial.println("Clockwise path is invalid!");
+        path = 2; //No path valid yet.
+      } else if ((abs(cwtest - deg) < tol) && (betweenPoints(vlimit, deg, cwtest) == true)) {
+        Serial.println("Clockwise path is valid!");
+        path = 1; //go clockwise path
+        break;
+      } 
+      if ((abs(ccwtest - deg) < tol) && (betweenPoints(votherLimit, deg, ccwtest) == false)) {
+        /*
+        Serial.println(votherLimit);
+        Serial.println(deg);
+        Serial.println(ccwtest);
+        Serial.println(abs(ccwtest - deg));
+        Serial.println(betweenPoints(votherLimit, deg, ccwtest));
+        */
+        Serial.println("Counterclockwise path is invalid!");
+        path = 2; //No valid path yet.
+      } else if ((abs(ccwtest - deg) < tol) && (betweenPoints(votherLimit, deg, ccwtest) == true)) {
+        Serial.println("Counterclockwise path is valid!");
+        path = 0; //go counterclockwise path
+        break;
+      }
+      if (negspeeds[x] < 0){
+        cwtest = cwtest-step;
+        ccwtest = ccwtest+step;
+        //Serial.print("CW: ");
+        //Serial.print(cwtest);
+        //Serial.print(" CCW: ");
+        //Serial.println(ccwtest);
+      } else {
+        cwtest = cwtest+step;
+        ccwtest = ccwtest-step;
+      }
+    }
+    //Since we flipped limits before must flip direction again to keep consistent.
+    /*if (negspeeds[x] < 0) { 
+      if(path == 0) {
+        path = 1;
+      } else if(path == 1) {
+        path = 0;
+      } else {
+        path = 2;
+      }
+      
+    }
+    */
+    return path;
+}
+bool betweenPoints(float limit, float input, float testpoint) {
+  /*limit = fmod((limit + 360),360);
+  input = fmod((input + 360),360);
+  testpoint = fmod((testpoint + 360),360);
+  */
+  if(limit < input) {
+    if(testpoint<input && testpoint>limit) {
+      //Serial.println("true1");
+      return true;
+    } else {
+        //Serial.println("false1");
+        return false;
+    }
+  } else if(limit > input) {
+      if(testpoint>input && testpoint<limit){
+        //Serial.println("true2");
+        return true;
+      } else {
+          //Serial.println("false2");
+          return false;
+      }
+  } else {
+    //Serial.println("false3");
+    return false;
+  }
+}
