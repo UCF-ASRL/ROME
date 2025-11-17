@@ -21,22 +21,24 @@ w = 0;
 theta = 10;
 % Z-offset from base of arm
 z_off = 0;
-
+rad2deg = 180/(pi);
 % t - time column
 time_steps = time*res;
 t=zeros(time_steps,1);
 t(1,1)=.02;
 for i=2:time_steps
-    t(i,1) = t(i-1) + 60/time_steps;
+    t(i,1) = t(i-1) + time/time_steps;
 end 
 theta_steps = 2*pi/time_steps;
 theta_vec(1,1) = 0;
 for i=2:time_steps
     theta_vec(i,1) = theta_vec(i-1,1)+theta_steps;
 end
-
+theta_vec_deg(:,1) = theta_vec(:,1)*rad2deg;
 for i=1:time_steps
-    [PosXYZ(:,i), VelXYZ(:,i)] = PERI2XYZ(a, e, incl, RA, w, theta_vec(i,1));
+    % [PosXYZ(:,i), VelXYZ(:,i)] = PERI2XYZ(a, e, incl, RA, w, theta_vec(i,1));
+    [PosXYZ(:,i), VelXYZ(:,i)] = PERI2XYZ(a, e, incl, RA, w, theta_vec_deg(i,1));
+
 end
 %[PosXYZ(:,i), VelXYZ(:,i)] = PERI2XYZ(a, e, incl, RA, w, theta(i,1));
 PosXYZ_horiz = PosXYZ';
@@ -104,4 +106,4 @@ initialtheta = [0.01, -90, 90, 0.01, 0.01, 0.01];
 
 %save file
 Filename = ['t', num2str(time), '_a', num2str(a), '_e', num2str(e), '_incl', num2str(incl), '_RA', num2str(RA), '_w', num2str(w), '_th', num2str(theta), '.mat'];
-save(fullfile(pwd, 'TestPaths', Filename), "path", "pathdeg");
+save(fullfile(pwd, 'Paths', Filename), "path", "pathdeg");
