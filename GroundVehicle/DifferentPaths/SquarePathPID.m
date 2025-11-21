@@ -7,12 +7,12 @@ close all
 
 
 %% --- Square Parameters --- %%     
-side     = 0.5;      % single side length [m]
-T     = 16;                 % period [s]
-T_per_side = T/4.0;
-dt    = 0.05;               % MATLAB control step [s]
-v_mag = side/(T_per_side);
-numFrames = int16(T*(1/dt)) + 1;
+side       = 0.5;                % single side length [m]
+T          = 16;                 % period [s]
+T_per_side = T/4.0;              % time to travel one side
+dt         = 0.05;               % MATLAB control step [s]
+v_mag      = side/(T_per_side);  % constant speed
+numFrames  = int16(T*(1/dt)) + 1;
 
 %% --- Buffers --- %%
 err = 0;
