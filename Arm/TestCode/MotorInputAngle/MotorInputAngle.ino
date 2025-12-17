@@ -19,10 +19,10 @@
 
 
 //Selected motor speeds
-int maxSpeed = 1000;
-int calspeed = 1000;
+int maxSpeed = 2000;
+int calspeed[6] = {1200,800,800,0,800,800};
 int maxAccel = 500;
-int runSpeed = 1000;
+int runSpeed = 750;
 //Calculated encoder count per motor step
 float countstep[6] = {20.48, 20.48, 20.48, 20.48, 20.48, 20.48}; 
 PacketSerial packetizer;
@@ -43,20 +43,24 @@ float stepsSec[6] = {0.0,0.0,0.0,0.0,0.0,0.0};
 
 
 //Ar2 motor values
-//Steps input to angle output(includes mechanical ratios, microstepping etc.)
+//Steps input to angle output(includes mechanical ratios, microstepping etc.) in step/deg
 //See Step Angle Troubleshooting excel file for calculations
 float stepsDeg[6] = {44.44444444, 55.55555556, 55.55555556, 46.66666667, 10, 20};
-float limits[6] = {-180, 132, 141, -165, 90, 180}; //Limits in direction of limit switch(NOT ccw or cw limits... see step angle troubleshooting sheet);
-float otherLimits[6] = {160, 0, 1, 165, -90, -170}; //Non limit-switched limits 
+float limits[6] = {-180, 132, 141, -165, 90, 180}; //Limits(deg) in direction of limit switch(NOT ccw or cw limits... see step angle troubleshooting sheet);
+float otherLimits[6] = {160, 0, 1, 165, -90, -170}; //Non limit-switched limits(deg)
 //holds negative rotation values for some motors => Motor direction depends on wiring order of A+ A-, B+ and B-. 
 //Only change if wiring from stepper to stepper driver changes.
-int negspeeds[6] = {1, -1, 1, 1, -1, -1};
+//int negspeeds[6] = {1, -1, 1, 1, -1, -1};
+int negspeeds[6] = {1, 1, -1, 1, -1, 1};
 //Arbitrary starting position.
-int startpos[6] = {0, 90, 0, 1, 0, 0};
+int startpos[6] = {0, 90, 90, 1, 0, 0};
 // Assign pin numbers to stepper
 byte pinNumbers[6][2] = {{0,1},{2,3},{4,5},{6,7},{8,9},{10,11}};
 //False if motor is uncalibrated, True if calibrated
 bool calibrated[6] = {false, false, false, false, false, false};
+
+enum HomeState {IDLE,MOVING,DONE};
+HomeState homeState[6] = {IDLE,IDLE,IDLE,IDLE,IDLE,IDLE};
 
 class LimitSwitch{
   public:
@@ -126,8 +130,21 @@ void loop() {
 
 
 void singleCalibrate(int x) {
+ 
+  //check if already on limit switch
+  if (digitalRead(LS[x].pin) == LOW) {
+    Serial.println("Already on limit switch... moving away.");
+    float toc = millis();
+    while((digitalRead(LS[x].pin == LOW))) {
+      steppers[x].setSpeed(calspeed[x]*negspeeds[x]);
+      steppers[x].runSpeed();
+    }
+  }
+
+  delay(1000);
+
   //Set speed and account for motor positive/negative direction(based on motor wiring)
-  steppers[x].setSpeed(-calspeed*negspeeds[x]);
+  steppers[x].setSpeed(-calspeed[x]*negspeeds[x]);
   Serial.print("running motor to limit:");
   Serial.println(limits[x]);
   //run until limit switch is triggered
@@ -161,41 +178,48 @@ void singleCalibrate(int x) {
     Serial.println("Starting position achieved");
   } 
 }
-//NOT FINISHED
-/*void fullCalibrate() {
+//Calibrates all motors simultaneously
+void fullCalibrate() {
+  bool calibration_finished = false;
+  bool limit_hit[6] = {false, false, false, false, false, false};
   //Set speed and account for motor positive/negative direction(based on motor wiring)
-  steppers[x].setSpeed(-calspeed*negspeeds[x]);
-  Serial.print("running motor to limit:");
-  Serial.println(limits[x]);
+  for (int i=0;i<6;i++){
+   steppers[i].setSpeed(-calspeed[i]*negspeeds[i]); 
+   Serial.println("Speed set");
+  }
   //run until limit switch is triggered
-  while(true) {
-    steppers[x].runSpeed();
+  while((limit_hit[0] != true) || (limit_hit[1] != true) || (limit_hit[2] != true) || /*(limit_hit[3] != true) ||*/ (limit_hit[4] != true) || (limit_hit[5] != true)) {
+    //If a motor has already hit limit, remain as is. Else, run motor to limit switch.
+    for (int i=0;i<6;i++){
+      if (limit_hit[i] == true){
+        steppers[i].setSpeed(0);
+      }
+      steppers[i].runSpeed();
+    }
     //debounce function to avoid limit switch readings oscillating
-    if ((digitalRead(LS[x].pin) == LOW) && (millis() - lastDebounce[x] > debounceTime)) {
-      lastDebounce[x] = millis();
-      break;
+    for (int i=0;i<6;i++){
+      if ((digitalRead(LS[i].pin) == LOW) && (millis() - lastDebounce[i] > debounceTime)) {
+        lastDebounce[i] = millis();
+        steppers[i].setCurrentPosition((long)(limits[i]*stepsDeg[i])); //deg * step/deg = step
+        encoders[i].write((long)(limits[i]*stepsDeg[i]*countstep[i])); // deg * step/deg * count/step = count
+        limit_hit[i] = true;
+      }
     }
   }
-  Serial.println("Limit found. Setting limit now");
-  //limit switch position is at known limit. update accelstepper and encoder position to this limit
-  //MUST MULTIPLY BY stepsdeg and countstep RESPECTIVELY!!! LIMITS ARE IN DEG, ACCELSTEPPER IN STEPS, ENCODER IN COUNTS
-  steppers[x].setCurrentPosition((long)(limits[x]*stepsDeg[x])); //deg * step/deg = step
-  encoders[x].write((long)(limits[x]*stepsDeg[x]*countstep[x])); // deg * step/deg * count/step = count
-  Serial.println(encoders[x].read());
-  Serial.print("Moving to ");
-  Serial.print(startpos[x]);
-  Serial.print(" degrees or ");
-  Serial.print(startpos[x]*stepsDeg[x]);
-  Serial.println(" steps");
-  encoderRunToVal(startpos[x]*stepsDeg[x], 3); //Use encoder feedback to move to starting position set at beginning of file
-  delay(50);
-  Serial.print("Output angle is ");
-  Serial.print(encoders[x].read()/countstep[x]/stepsDeg[x]);
-  Serial.print("degrees or "); 
-  Serial.print(encoders[x].read()/countstep[x]);
-  Serial.println("steps.");
+  while(calibration_finished!=true){
+    calibration_finished = true;
+    for(int i=0;i<6;i++){
+      if(i==3) continue;
+      if(homeState[i] != DONE){ //Use encoder feedback to move to starting position set at beginning of file
+        encoderRunToVal_nb(i,startpos[i]*stepsDeg[i], 3);
+        calibration_finished = false;
+        if(homeState[i] != DONE) calibration_finished = false;
+      } 
+    } 
+  }
 }
-*/
+
+
 
 //Function to validate trajectory. 
 //Checks to see if input is within limit range
@@ -373,8 +397,57 @@ void encoderRunToVal(int x, float targetSteps, int path) {
         }
         steppers[x].moveTo(encoders[x].read()/countstep[x] + error);
         steppers[x].run();
-        Serial.println(encoders[x].read());
+        //Serial.println(encoders[x].read());
       }
+}
+
+
+void encoderRunToVal_nb(int x, float targetSteps, int path) {
+  //float encTol = .01;
+  
+        long encoderVal = encoders[x].read();
+        //Converts encoder reading from counts to steps.
+        long actual = encoderVal/countstep[x];// In steps
+        long error = targetSteps - actual; // In steps
+        Serial.println(targetSteps);
+        Serial.println(actual);
+        Serial.println(error);
+        //error variable holds the location data and corrects for any incorrections from the motor
+        //if error < limit the position has been reached
+        // if error > limit the motor will continue to move to the desired location which is current plus error
+        if(abs(error) < encTol){
+          steppers[x].setSpeed(0);
+          homeState[x] = DONE;
+          return;
+        }
+        
+        steppers[x].setAcceleration(maxAccel);
+        if(x!=2){
+          if (path == 3){
+            steppers[x].setSpeed(runSpeed*negspeeds[x]);
+          } else if (path == 0) {
+            steppers[x].setSpeed(-runSpeed*negspeeds[x]);//-
+          } else if (path == 1) {
+            steppers[x].setSpeed(runSpeed*negspeeds[x]);//+
+          } else {
+            return;
+          }
+        } else if(x == 2){
+            if (path == 3){
+              steppers[x].setSpeed(runSpeed*negspeeds[x]);
+          } else if (path == 0) {
+              steppers[x].setSpeed(runSpeed*negspeeds[x]);//-
+          } else if (path == 1) {
+              steppers[x].setSpeed(-runSpeed*negspeeds[x]);//+
+          } else {
+            return;
+          }
+        }
+        steppers[x].moveTo(actual + error);
+        steppers[x].run();
+        homeState[x] = MOVING;
+        //Serial.println(encoders[x].read());
+        return; //still moving
 }
 //Function that puts the robot in a safe power off position.
 void fullPowerOff() {
@@ -545,7 +618,7 @@ void moveToPoint(){
 void singleDispEnc(int x){
   Serial.println("Encoder value is:");
   Serial.println("Encoder:    Degrees:    Steps:    Counts:");
-  Serial.print(x);
+  Serial.print(x+1);
   Serial.print("           ");
   Serial.print(encoders[x].read()/countstep[x]/stepsDeg[x]);
   Serial.print("        ");
@@ -559,7 +632,7 @@ void fullDispEnc(){
   Serial.println("Encoder values are:");
   Serial.println("Encoder:    Degrees:    Steps:    Counts:");
   for (int i=0;i<6;i++){
-    Serial.print(i);
+    Serial.print(i+1);
     Serial.print("            ");
     Serial.print(encoders[i].read()/countstep[i]/stepsDeg[i]);
     Serial.print("        ");
@@ -641,11 +714,11 @@ void menu(){
           clearScreen();
           switch(s3) {
             case 1:
-            /*
+            
               Serial.print("Calibrating arm...");
               fullCalibrate();
               Serial.println("Calibration Complete.");
-              */
+              
               break;
             case 2:
               fullDispEnc();

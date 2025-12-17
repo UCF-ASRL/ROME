@@ -32,16 +32,16 @@ classdef AR3Serial
         %            -155*(pi/180), -86.5*(pi/180), -155*(pi/180)]
         %CCWLimit = [160*(pi/180), -42.5*(pi/180), 145*(pi/180)...
         %            155*(pi/180), 86.5*(pi/180), 155*(pi/180)]
-        REST = [0,120,140,0,0,0,...
-                .25,.25,.25,.25,.25,.25];
-         CWLimit = [-180,132,1,...
-                    -165,90,-170];
-         CCWLimit = [160,0,1,...
-                     165,-90,180]
-        % CWLimit = [-170,-42,-89,...
-        %            -155,-105,-155];
-        % CCWLimit = [170,90,52,...
-        %             155,105,155]
+        % REST = [0,120,140,0,0,0,...
+        %         .25,.25,.25,.25,.25,.25];
+        %  CWLimit = [-180,132,1,...
+        %             -165,90,-170];
+        %  CCWLimit = [160,0,1,...
+        %              165,-90,180]
+        CWLimit = [160,0,141,...
+                   165,-90,180];
+        CCWLimit = [-180,132,1,...
+                    -165,90,-170]
         % CWLimit = [-170,-129,1,...
         %            -164,-104,-148];
         % CCWLimit = [170,0,143,...
@@ -141,19 +141,19 @@ classdef AR3Serial
         function [] = updateStates(obj,statesArray)
             CMD = obj.UPDATE_STATES;
             
-            % for i = 1:6
+            for i = 1:6
             %     if (statesArray(i) <= obj.CCWLimit(i))
             %         statesArray(i) = obj.CCWLimit(i);
             %         disp(statesArray(i))
             %     elseif (statesArray(i) >= obj.CWLimit(i))
             %         statesArray(i) = obj.CWLimit(i);
             %     end
-            %     % Convert position to steps
-            %     statesArray(i) = statesArray(i) * obj.STEPPER_CONSTANTS_DEG(i);
-            %     % Convert velocity to steps
-            %     statesArray(i+6) = statesArray(i+6) * obj.STEPPER_CONSTANTS_DEG(i);
-            % end
-            
+                % Convert position to steps
+                statesArray(i) = statesArray(i) * obj.STEPPER_CONSTANTS_DEG(i);
+                % Convert velocity to steps
+                statesArray(i+6) = statesArray(i+6) * obj.STEPPER_CONSTANTS_DEG(i);
+            end
+
             
             posArray = int32(statesArray(1:6));
             velArray = single(statesArray(7:12));
