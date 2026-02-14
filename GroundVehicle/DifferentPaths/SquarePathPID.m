@@ -1,3 +1,4 @@
+
 close all
 %Based on this research paper: https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=1244061
 
@@ -8,7 +9,7 @@ close all
 
 %% --- Square Parameters --- %%     
 side       = 0.5;                % single side length [m]
-T          = 16;                 % period [s]
+T          = 12;                 % period [s]
 T_per_side = T/4.0;              % time to travel one side
 dt         = 0.05;               % MATLAB control step [s]
 v_mag      = side/(T_per_side);  % constant speed
@@ -36,7 +37,7 @@ vy_ref_log = zeros(1,numFrames);
 
 %% --- Bluetooth Serials --- %% 
 clc;
-bt = serialport("COM3", 115200);   % adjust baud as needed
+bt = serialport("COM4", 115200);   % adjust baud as needed
 configureTerminator(bt,"LF");
 flush(bt);
 
@@ -103,7 +104,7 @@ t0 = tic;
 
     % Measured position in meters, zeroed at origin
     x_cap = -(data.RigidBodies(1).x - x_origin); %%place robot on right corner of square (0, 0)
-    y_cap = (data.RigidBodies(1).y - y_origin);
+    y_cap = -(data.RigidBodies(1).y - y_origin);
 
     %pull all captured quaternions into matrix. Convert to eularian values
     %(yaw, pitch, roll) and save in eul_cap%
@@ -123,34 +124,44 @@ t0 = tic;
     fprintf('Yaw:%0.1fdeg  ', rad2deg(yaw_cap));
     fprintf('T:%0.2f\n', t);
 
-    % Reference postions %
-    what_side = ceil(idx / (numFrames/4.0)); % side # GV needs to traverse. Used to pull correct ref pos/velos
-    what_side = min(4, what_side);
+%% --- Refined Reference Logic (t-based) --- %%
+    if t <= T_per_side
+        % Side 1: Move from (0,0) to (0, side)
+        x_ref = 0;
+        y_ref = v_mag * t;
+        vx_ref = 0;
+        vy_ref = v_mag;
+    elseif t <= 2*T_per_side
+        % Side 2: Move from (0, side) to (-side, side)
+        dt_side = t - T_per_side;
+        x_ref = -v_mag * dt_side;
+        y_ref = side;
+        vx_ref = -v_mag;
+        vy_ref = 0;
+    elseif t <= 3*T_per_side
+        % Side 3: Move from (-side, side) to (-side, 0)
+        dt_side = t - 2*T_per_side;
+        x_ref = -side;
+        y_ref = side - (v_mag * dt_side);
+        vx_ref = 0;
+        vy_ref = -v_mag;
+    else
+        % Side 4: Move from (-side, 0) to (0, 0)
+        dt_side = t - 3*T_per_side;
+        x_ref = -side + (v_mag * dt_side);
+        y_ref = 0;
+        vx_ref = v_mag;
+        vy_ref = 0;
+    end
 
-    %% --- ref position for each side of path --- %%
-    s1 = [0 , v_mag * t];
-    s2 = [-v_mag * (t - (T_per_side)), side];
-    s3 = [-side , side - (v_mag * (t - (2*T_per_side)))];
-    s4 = [-side + (v_mag * (t - (3*T_per_side))), 0];
+    % Log references
+    xr_log(idx) = x_ref; 
+    yr_log(idx) = y_ref;
+    vx_ref_log(idx) = vx_ref; 
+    vy_ref_log(idx) = vy_ref;
 
-    %% --- ref velos for each side of path --- %%
-    v1 = [0 , v_mag];
-    v2 = [-v_mag , 0];
-    v3 = [0 , -v_mag];
-    v4 = [v_mag , 0];
-
-    q = {s1, s2, s3, s4};
-    q_dot = {v1, v2, v3, v4};
-    
-    x_ref = q{what_side}(1);
-    y_ref = q{what_side}(2);
-    xr_log(idx) = x_ref; yr_log(idx) = y_ref;
- 
-    % Reference body velocities %
-    vx_ref = q_dot{what_side}(1);
-    vy_ref = q_dot{what_side}(2);
-    vx_ref_log(idx) = vx_ref; vy_ref_log(idx) = vy_ref;
-    V = [vx_ref; vy_ref; yaw_cap];  %yaw_cap passed along to IK to accomodate for unwanted rotation of GV
+    % Reference velocity vector
+    V = [vx_ref; vy_ref; yaw_cap];
 
     %% --- Error --- %%
     ex = x_ref - x_cap;
