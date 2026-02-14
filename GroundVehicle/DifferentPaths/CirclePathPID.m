@@ -15,6 +15,8 @@ numFrames = int16(T*(1/dt)) + 1;
 
 %% --- Buffers --- %%
 err = 0;
+% x_cap_prev = 0;
+% y_cap_prev = 0;
 rel_err = 0;
 abs_err = 0;
 Err_int = [0;0;0];
@@ -34,7 +36,7 @@ vy_ref_log = zeros(1,numFrames);
 clc;
 
 %% --- Bluetooth Serials --- %% 
-bt = serialport("COM10", 115200);   % adjust baud as needed
+bt = serialport("COM4", 115200);   % adjust baud as needed
 configureTerminator(bt,"LF");
 flush(bt);
 
@@ -100,8 +102,8 @@ t0 = tic;
     time_s(idx) = t;
 
     % Measured position in meters, zeroed at origin
-    x_cap = -(data.RigidBodies(1).x - x_origin - R); 
-    y_cap = -(data.RigidBodies(1).y - y_origin);
+    x_cap = (data.RigidBodies(1).x - x_origin + R);
+    y_cap = (data.RigidBodies(1).y - y_origin);
 
     %pull all captured quaternions into matrix. Convert to eularian values
     %(yaw, pitch, roll) and save in eul_cap%
@@ -116,36 +118,36 @@ t0 = tic;
     %% --- Console print (keep your style) --- %%
     fprintf('Name:"%s"  ', model.RigidBody(1).Name);
     fprintf('Frame #:"%d"  ', data.iFrame - frame_og);
-    fprintf('X:%0.1fmm  ', x_cap); %Motive sends data in Meters, this converts to mm
-    fprintf('Y:%0.1fmm  ', y_cap);
-    fprintf('Yaw:%0.1fdeg  ', rad2deg(yaw_cap));
+    fprintf('X:%0.3fmm  ', x_cap); %Motive sends data in Meters, this converts to mm
+    fprintf('Y:%0.3fmm  ', y_cap);
+    fprintf('Yaw:%0.3fdeg  ', rad2deg(yaw_cap));
     fprintf('T:%0.2f\n', t);
 
     %% --- Reference (circle) position & velocity --- %%
     % Keep center at (0,0) after zeroing originsframe_og
-    x_ref = (R*cos(omega*t)); 
-    y_ref = (R*sin(omega*t));
+    x_ref = -(R*sin(omega*t)); 
+    y_ref = (R*cos(omega*t));
     xr_log(idx) = x_ref;  yr_log(idx) = y_ref;
 
-    % Calculate velocity
-    dx = (x_cap - x_cap_prev);
-    dy = (y_cap - y_cap_prev);
-    ds = sqrt(dx^2 + dy^2);
+    % % Calculate velocity
+    % dx = (x_cap - x_cap_prev);
+    % dy = (y_cap - y_cap_prev);
+    % ds = sqrt(dx^2 + dy^2);
 
     % Reference body velocities for ROME path
-    vx_ref = -R*omega*sin(omega*t);
-    vy_ref =  R*omega*cos(omega*t);
+    vx_ref = -R*omega*cos(omega*t);
+    vy_ref =  -R*omega*sin(omega*t);
     vx_ref_log(idx) = vx_ref; vy_ref_log(idx) = vy_ref;
     V = [vx_ref; vy_ref; yaw_cap];  %yaw_cap passed along to IK to accomodate for unwanted rotation of GV
     %% --- Error --- %%
     ex = x_ref - x_cap;
     ey = y_ref - y_cap;
 
-    %% --- Relative Error (%) --- %%
-    ref_dist = sqrt(x_ref^2 + y_ref^2);
-    err = sqrt(ex^2 + ey^2);
-    abs_err = abs_err + err * ds;
-    rel_err = rel_err + (abs(ref_dist - err)/ref_dist);
+    % %% --- Relative Error (%) --- %%
+    % ref_dist = sqrt(x_ref^2 + y_ref^2);
+    % err = sqrt(ex^2 + ey^2);
+    % abs_err = abs_err + err * ds;
+    % rel_err = rel_err + (abs(ref_dist - err)/ref_dist);
     ex_log(idx) = ex;  ey_log(idx) = ey;
     Err = [ex ; ey ; 0];  %%zero in yaw spot to represent no corrections along this DOF yet
     Err_int = Err_int + Err*dt;
