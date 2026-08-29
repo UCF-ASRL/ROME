@@ -20,7 +20,7 @@
 
 //Selected motor speeds
 int maxSpeed = 2000;
-int calspeed[6] = {1200,800,800,0,800,800};
+int calspeed[6] = {1200,800,800,800,800,800};
 int maxAccel = 500;
 int runSpeed = 750;
 //Calculated encoder count per motor step
@@ -51,7 +51,7 @@ float otherLimits[6] = {160, 0, 1, 165, -90, -170}; //Non limit-switched limits(
 //holds negative rotation values for some motors => Motor direction depends on wiring order of A+ A-, B+ and B-. 
 //Only change if wiring from stepper to stepper driver changes.
 //int negspeeds[6] = {1, -1, 1, 1, -1, -1};
-int negspeeds[6] = {1, 1, -1, 1, -1, 1};
+int negspeeds[6] = {-1, 1, 1, 1, 1, -1};
 //Arbitrary starting position.
 int startpos[6] = {0, 90, 90, 1, 0, 0};
 // Assign pin numbers to stepper
