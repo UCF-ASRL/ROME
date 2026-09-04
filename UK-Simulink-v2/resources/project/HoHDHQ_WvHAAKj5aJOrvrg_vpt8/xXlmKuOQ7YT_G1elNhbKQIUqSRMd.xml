@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Info description="This simulink model uses Udwadia-Kalaba dynamics to run the ROME ground vehicle. Future iterations will also include the robotic arm. Dashboard sliders can be used to toggle between simulation and hardware modes, as well as enable or disable the Motive motion capture camera input."/>

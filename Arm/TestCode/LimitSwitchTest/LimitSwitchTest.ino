@@ -6,7 +6,7 @@ class LimitSwitch{
 
 };
 //Time for debouncing limit switches
-const unsigned long debounceTime = 100;
+const unsigned long debounceTime = 1000;
 unsigned long LastDebounce[6] = {};
 LimitSwitch LS[6];
 int pn = 0;
