@@ -71,8 +71,11 @@ arm_offset_deg = [ 0 180  90   0   0   0];   % added after the sign, degrees
 % command is capped to these in ROMECommand (arm_clamp) after the map above,
 % so nothing outside them is ever sent. The wheel command is capped
 % separately in CommandGuard (max_rpm, scaled as a vector).
-arm_fw_lo = [-180    0    1 -165  -90 -170];  % firmware degrees
-arm_fw_hi = [ 160  132  141  165   90  180];
+% Copied from ROME_Teensy_Code.ino as they are written there: limits[] is
+% the angle the firmware assigns at each joint's limit switch, otherLimits[]
+% the far end of travel. arm_clamp sorts each pair itself.
+arm_fw_switch = [-180  132  141 -165   90  180];  % limits[]      (switch side)
+arm_fw_other  = [ 160    0    1  165  -90 -170];  % otherLimits[] (non-switch side)
 arm_fw_margin_deg = 2.0;    % cap stays this far inside BOTH ends of every
                             % joint, so a calibration off by this much still
                             % never reaches a switch. -90..90 becomes -88..88.

@@ -96,18 +96,21 @@ assert(worst <= 120 + 1e-9, 'output exceeded the ceiling: %.12f', worst);
 fprintf('  [OK] 2000 random draws, none non-finite      max |rpm| %.1f\n', worst);
 
 %% 5b. joint cap: firmware degrees, each joint to its own range, margin inside
-lo = arm_fw_lo;  hi = arm_fw_hi;  mg = arm_fw_margin_deg;
-[d, hit] = arm_clamp([0 90 90 1 0 0], lo, hi, mg);            % firmware home
+sw = arm_fw_switch;  ot = arm_fw_other;  mg = arm_fw_margin_deg;
+lo = min(sw, ot);  hi = max(sw, ot);
+assert(isequal(sw, [-180 132 141 -165 90 180]) && isequal(ot, [160 0 1 165 -90 -170]), ...
+       'arm_fw_switch / arm_fw_other no longer match limits[] / otherLimits[] in ROME_Teensy_Code.ino');
+[d, hit] = arm_clamp([0 90 90 1 0 0], sw, ot, mg);            % firmware home, firmware order
 assert(isequal(d, [0 90 90 1 0 0]) && ~any(hit), 'firmware home was altered');
-[d, hit] = arm_clamp([-200 -53 150 0 95 0], lo, hi, mg);      % outside on 1,2,3,5
+[d, hit] = arm_clamp([-200 -53 150 0 95 0], sw, ot, mg);      % outside on 1,2,3,5
 assert(isequal(d, [-180+mg 0+mg 141-mg 0 90-mg 0]), 'cap gave %s', mat2str(d));
 assert(isequal(hit, logical([1 1 1 0 1 0])), 'hit flags %s', mat2str(hit));
-[d, hit] = arm_clamp([160 132 141 165 90 180], lo, hi, mg);   % exactly on the ends
+[d, hit] = arm_clamp([160 132 141 165 90 180], ot, sw, mg);   % exactly on the ends, arrays swapped
 assert(all(hit) && isequal(d, hi - mg), 'ends not pulled in by the margin: %s', mat2str(d));
-[d, hit] = arm_clamp(lo, lo, hi, mg);                         % negative ends too
+[d, hit] = arm_clamp(lo, sw, ot, mg);                         % negative ends too
 assert(all(hit) && isequal(d, lo + mg), 'negative ends not pulled in: %s', mat2str(d));
 m2f = arm_sign .* rad2deg(arm_home(:).') + arm_offset_deg;    % the start pose, mapped
-[~, hit] = arm_clamp(m2f, lo, hi, mg);
+[~, hit] = arm_clamp(m2f, sw, ot, mg);
 assert(~any(hit), 'arm_home maps outside the firmware range: %s', mat2str(round(m2f)));
 fprintf('  [OK] joint cap: margin %g deg inside both ends   arm_home -> fw %s\n', mg, mat2str(round(m2f)));
 

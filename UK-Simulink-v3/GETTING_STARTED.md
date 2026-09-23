@@ -7,17 +7,19 @@ Every other file that talks to the robot reads that block: `ROMECommand`
 `calibrateROMEArm` (parking pose), `check_9dof` / `gate_all` (the gate).
 Change a number there, re-run `gate_all`, and all of them follow.
 
-**Verification status, 22 September 2026, 22:00.** Pushed before the full
-gate finished, on purpose. What has been run with the current code:
-`check_guard` unit tests (9/9, joint cap included); the seed of every
-scenario is exact (position 1e-14 m, attitude 0.00 deg); time-resolved runs
-of scenarios 1 and 2 outside Simulink pass every gate threshold (scenario 1:
-hold quiet at 1.8 rpm and 9 um, lap peak 18.9 rpm, steady error 2 mm;
-scenario 2: peak 1.6 rpm, 75 um); the branch study completes all five laps
-inside the joint window. What has NOT been run yet: `gate_all` in the
-Simulink model with the 60 rpm ceiling, `derivation_checks`, and the
-placement-error sweep. **Do not put `EnableHardware = 1` until this
-paragraph says `gate_all` passed.** It will be updated in the next push.
+**Verification status, 22 September 2026, 22:40 — `gate_all` passed.**
+With the code as pushed: all five scenarios pass `check_9dof` in the
+Simulink model (two static checks, constraint residual < 1e-11, wheel peaks
+18.9 / 1.7 / 1.7 / 5.2 / 3.7 rpm against the 60 rpm ceiling, min s
+0.675-0.678 over every run, steady errors 0.08-1.65 mm under the lag bound,
+joints never closer than 34 deg to a firmware limit). `derivation_checks`:
+all passed. `check_guard`: 10/10. Placement sweep: 45 of 45 runs (each
+scenario from the card plus eight placements up to 15 cm / 15 deg off it and
+the arm up to 5 deg off, all from rest) complete inside the joint window,
+worst peak 34 rpm. The one item simulation cannot clear is the joint
+convention on the real arm (step 3): on the first lab try J1, J2 and J5
+moved the opposite way to their targets — a Teensy encoder-loop issue, not
+the numbers sent. Measure it with `jog_joint` before `EnableHardware = 1`.
 
 ---
 
@@ -33,7 +35,7 @@ size_factor    = 0.50;             % of the designed size. 2.1 x 2.1 m of floor.
 max_rpm        = 60;               % wheel ceiling (firmware's own cap is 120)
 arm_sign       = [ 1 -1 -1  1  1  1];   % model -> firmware joint map, SEE STEP 3
 arm_offset_deg = [ 0 180 90  0  0  0];  %   firmware = arm_sign .* model + arm_offset_deg
-arm_fw_lo / arm_fw_hi              % firmware ranges, from ROME_Teensy_Code.ino
+arm_fw_switch / arm_fw_other       % limits[] / otherLimits[], copied from ROME_Teensy_Code.ino
 arm_fw_margin_deg = 2.0;           % the cap stays this far inside both ends
 ```
 
@@ -87,14 +89,25 @@ So `firmware J2 = 180 − model J2`, `firmware J3 = 90 − model J3`; J1, J4,
 J5, J6 are symmetric ranges and only their sign is in question. Those are the
 defaults in the block. They are **derived, not measured**. The jog test:
 
-1. `CAL_ARM` (via `calibrateROMEArm`, which now also parks the arm at the
-   scenario's start posture and prints both sets of angles).
+1. `calibrateROMEArm`. It sends `HOME` with the scenario's start posture
+   (firmware degrees) first, then `CAL_ARM`, so the calibration itself ends
+   at the start posture; then it watches the `ARM,` line and prints a
+   per-joint verdict. Note the firmware reports its forced home values
+   right after calibrating, so "at target" there is not proof — look at
+   the arm. J4 has no encoder; its reading is always the command.
 2. Jog one joint +10 deg in firmware with zero wheel speed:
    ```matlab
-   c = tcpclient("192.168.4.1", 3333);
-   fw = [-3 53 100 0 -27 0];  fw(2) = fw(2) + 10;         % J2, +10
-   write(c, uint8(char(sprintf('ROME,0,0,0,0,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\n', fw))));
+   jog_joint(2, 10)      % J2, +10 deg: prints reading before/after, feeds the watchdog
    ```
+   Two firmware faults look alike from MATLAB; the jog tells them apart.
+   *Arm goes the commanded way, reading runs the other way*: that joint's
+   encoder counts against its steps — swap its `Encoder(a, b)` pins (or
+   negate its read) in the sketch. `negspeeds[]` does not touch this: it
+   only sets the sign for `runSpeed()` in the calibration drive; the
+   closed-loop moves use `moveTo`/`run`, whose direction is target minus
+   position. *Arm goes the wrong way*: step direction. (22 Sep 2026 first
+   try: J1, J2, J5 were commanded lower and their readings went UP — the
+   encoder case; J3 and J6 behaved.)
 3. What the model says the same jog does, from the start posture:
    ```matlab
    q = arm_home; j = 2;  dq = zeros(6,1); dq(j) = deg2rad(10) * arm_sign(j);
@@ -121,9 +134,10 @@ check_guard     % the guard and the joint cap
 1. Place the base in the camera area. `EnableMotive = 1`: the cameras report
    where it is. Cameras off: put it where the card says, or type the measured
    pose into `base_override`.
-2. `calibrateROMEArm`. Calibrates, then parks the arm at the start posture
-   and tells you what it should look like. If the arm does not move to it,
-   the firmware rejected an angle: step 3.
+2. `calibrateROMEArm`. Sends the start posture as the firmware home,
+   calibrates straight to it, and tells you what it should look like
+   (elbow up-forward, forearm down, tool at the floor ~0.34 m ahead of the
+   base axis). If it does not look like that: step 3, `jog_joint`.
 3. `EnableHardware = 1`, run. First 10 s nothing moves (hold), then the base
    starts slowly. Slow lap.
 
@@ -138,11 +152,12 @@ check_guard     % the guard and the joint cap
 time. `verify_wheelmap` proves the model is self-consistent; it cannot see the
 wiring.
 
-**It will not stop.** The arm does: `STOP_ALL` holds the joints where they
-are, and the Teensy's 500 ms watchdog holds them if commands stop (Keanu's
-22 Sep 2026 firmware). The base does not: `STOP_ALL` → `!` → Mega returns
-*before* writing PWM, so the last wheel command stays applied. **Cut
-power.** Known gap.
+**It will not stop.** The arm does: the Teensy's 500 ms watchdog holds
+the joints once commands stop, and `STOP_ALL` holds them explicitly once
+the ESP32 is re-flashed with the 22 Sep fix (it used to forward `STOP`,
+which the Teensy does not understand). The base does not: `STOP_ALL` → `!`
+→ Mega returns *before* writing PWM, so the last wheel command stays
+applied. **Cut power.** Known gap.
 
 **Camera mode misbehaves.** `EnableMotive = 1` has never been run. Fall back
 to `EnableMotive = 0` with `base_override` set; that path is gated.

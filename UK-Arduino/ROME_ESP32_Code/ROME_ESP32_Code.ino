@@ -141,7 +141,7 @@ void processCommand(String cmd)
     if (cmd == "STOP_ALL")
     {
         GVSerial.println("!");
-        ARMSerial.println("STOP");
+        ARMSerial.println("STOP_ALL");   // the Teensy has no "STOP"; "STOP_ALL" holds the joints
         Serial.println("[CMD] EMERGENCY STOP_ALL BROADCAST");
         return;
     }

@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Info File="ROME_Main.slx" GroupUUID="default" Icon="" Name="ROME_Main" Type="StartUp" Visible="0">
+<Info File="ROME_9DOF.slx" GroupUUID="default" Icon="" Name="ROME_9DOF" Type="StartUp" Visible="0">
     <Extension Name="StartUpPrev" Value="HEAD"/>
 </Info>

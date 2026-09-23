@@ -161,7 +161,8 @@ fprintf('  %s end effector tracks       steady RMSE %.3e m (limit %.3e, bound %.
 % margin to spare. If it does not, arm_clamp would cap it on the robot and
 % the real arm would no longer be where the model believes it is.
 sg = evalin('base','arm_sign');  of = evalin('base','arm_offset_deg');
-lo = evalin('base','arm_fw_lo'); hi = evalin('base','arm_fw_hi');
+sw = evalin('base','arm_fw_switch'); ot = evalin('base','arm_fw_other');
+lo = min(sw, ot);  hi = max(sw, ot);        % per joint, as arm_clamp sorts them
 mg = evalin('base','arm_fw_margin_deg');
 fw = sg .* rad2deg(q(:,4:9)) + of;                 % N x 6, firmware degrees
 R.fw_min = min(fw, [], 1);  R.fw_max = max(fw, [], 1);
