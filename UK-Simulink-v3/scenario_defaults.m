@@ -32,7 +32,7 @@ switch scenario
         % orbital elements and both scale factors are the values that model
         % uses, so selecting scenario 1 reproduces its commanded path.
         par  = [0 0 0 0];
-        D    = 1;
+        D    = 1.0;
         S    = 0.40;
         tf   = 2*pi*sqrt(1.4^3/1.0)/0.40;
         name = 'orbit (elliptical)';

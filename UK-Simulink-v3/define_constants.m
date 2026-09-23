@@ -2,7 +2,7 @@
 %  EDIT THIS BLOCK. NOTHING ELSE IN THIS FILE NEEDS TOUCHING.
 %  ========================================================================
 
-scenario = 4;          % 1 ellipse | 2 V-bar | 3 R-bar | 4 NMC | 5 circle
+scenario = 1;          % 1 ellipse | 2 V-bar | 3 R-bar | 4 NMC | 5 circle
 
 EnableHardware = 0;    % 0 simulate only. 1 commands the real robot.
 EnableMotive   = 0;    % 0 closes the loop on the model's own state.
