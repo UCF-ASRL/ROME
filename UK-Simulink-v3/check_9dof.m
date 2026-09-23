@@ -127,6 +127,20 @@ R.lag_gate = 1.5*R.lag_bound;      % the threshold, bound plus 50 pct margin
 o = R.rmse_ee < R.lag_gate;  f = f + ~o;
 fprintf('  %s end effector tracks       steady RMSE %.3e m (limit %.3e, bound %.3e)\n', ...
         tag(o), R.rmse_ee, R.lag_gate, R.lag_bound);
+% Every arm command of the run, mapped to firmware degrees the way
+% ROMECommand sends it, must sit inside the firmware ranges with the safety
+% margin to spare. If it does not, arm_clamp would cap it on the robot and
+% the real arm would no longer be where the model believes it is.
+sg = evalin('base','arm_sign');  of = evalin('base','arm_offset_deg');
+lo = evalin('base','arm_fw_lo'); hi = evalin('base','arm_fw_hi');
+mg = evalin('base','arm_fw_margin_deg');
+fw = sg .* rad2deg(q(:,4:9)) + of;                 % N x 6, firmware degrees
+R.fw_min = min(fw, [], 1);  R.fw_max = max(fw, [], 1);
+R.fw_room = min([R.fw_min - (lo + mg), (hi - mg) - R.fw_max]);
+o = R.fw_room >= 0;  f = f + ~o;
+fprintf('  %s arm inside firmware range  closest approach %.1f deg to a limit (margin %g)\n', ...
+        tag(o), R.fw_room + mg, mg);
+fprintf('       fw min %s\n       fw max %s\n', mat2str(round(R.fw_min)), mat2str(round(R.fw_max)));
 fprintf('       peak arm torque %.2f N m  (no actuator limit on record)\n', R.peak_tau);
 fprintf('       base travels to %.2f m from the origin -- clear that space,\n', R.base_reach);
 fprintf('       it is NOT the 4.2 m x 4.2 m of the 3-DOF orbit \n');
@@ -135,11 +149,11 @@ fprintf('\n=======================================================\n');
 if f == 0
     fprintf('  RESULT: PASS\n');
 else
-    fprintf('  RESULT: FAIL - %d of 4 checks did not meet threshold\n', f);
+    fprintf('  RESULT: FAIL - %d of 5 checks did not meet threshold\n', f);
 end
 fprintf('=======================================================\n\n');
 if f > 0
-    error('check_9dof:failed','%d of 4 checks failed; not fit for a hardware run.', f);
+    error('check_9dof:failed','%d of 5 checks failed; not fit for a hardware run.', f);
 end
 end
 

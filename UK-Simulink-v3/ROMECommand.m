@@ -6,6 +6,7 @@ classdef ROMECommand < matlab.System
     properties (Access = private)
         DeviceHandle
         initial_run = true
+        clamp_warned = false
         actualWheelRPM_
         actualJointDeg_
         armReady_
@@ -66,6 +67,20 @@ classdef ROMECommand < matlab.System
             if evalin('base', 'exist(''arm_offset_deg'',''var'')')
                 jointDeg = evalin('base', 'arm_sign(:).''') .* jointDeg(:).' ...
                          + evalin('base', 'arm_offset_deg(:).''');
+            end
+            % Cap to what the firmware accepts, in firmware degrees, so a
+            % posture outside the ranges is pulled to the end instead of
+            % being rejected and silently not executed.
+            if evalin('base', 'exist(''arm_fw_lo'',''var'')')
+                [jointDeg, hit] = arm_clamp(jointDeg, evalin('base','arm_fw_lo'), ...
+                                                      evalin('base','arm_fw_hi'), ...
+                                                      evalin('base','arm_fw_margin_deg'));
+                if any(hit) && ~obj.clamp_warned
+                    warning('ROMECommand:clamp', ...
+                        'arm command capped to the firmware range on joint(s) %s', ...
+                        mat2str(find(hit)));
+                    obj.clamp_warned = true;
+                end
             end
             msg = sprintf(...
                ['ROME,' ...

@@ -41,22 +41,32 @@ speed_factor = 0.50;   % of the designed speed
 size_factor  = 0.50;   % of the designed size
 
 % ARM JOINT CONVENTION. The model's joint angles and the Teensy firmware's
-% are NOT the same numbers, and for J2 they do not even run the same way.
-% Model J2 = 0 is the upper arm hanging straight DOWN; model J2 = 90 is
-% horizontal forward. The AR3 measures J2 from vertical UP and can only
-% lean -42..+90 deg, so model J2 = 0 is a posture the real arm cannot take,
-% and arm_home (J2 = -53) is further out still. The firmware then rebases
-% each joint so its limit switch reads limits[] (J2: 0..132, J3: 1..141) and
-% REJECTS anything outside (ValidateTraj returns 2, the arm does not move).
+% are NOT the same numbers. Model J2 = 0 is the upper arm hanging straight
+% DOWN, 90 is horizontal forward, 180 is straight up; model J3 = 90 is the
+% forearm aligned with the upper arm, 0 is bent 90 deg forward. The AR3
+% (ARCS 1.0 defaults, Annin_AR3_software in the Literature Review folder)
+% has J2 = 0 vertical up and travels 129.6 deg forward, J3 = 0 aligned and
+% travels 143.7 deg forward. The ROME firmware rebases those to J2 0..132
+% and J3 1..141 with the switch at the forward / folded end. Hence
 %
-% What goes over the wire is   firmware_deg = arm_sign .* model_deg + arm_offset_deg
+%     firmware_deg = arm_sign .* model_deg + arm_offset_deg
 %
-% Both vectors have to be measured on the arm, once. GETTING_STARTED.md
-% step 3 is the procedure: CAL_ARM, jog one joint at a time, compare with
-% what the model says the same jog does. Until that is done leave the
-% defaults and keep EnableHardware = 0: with them the firmware rejects J2.
-arm_sign       = [1 1 1 1 1 1];     % +1 same direction as the model, -1 opposite
-arm_offset_deg = [0 0 0 0 0 0];     % added after the sign, degrees
+% with the values below DERIVED from those files, not yet measured on the
+% arm. GETTING_STARTED.md step 3 is the jog test that confirms each joint;
+% do it before EnableHardware = 1. J1, J4, J5, J6 are symmetric ranges, so
+% only their sign is in question.
+arm_sign       = [ 1  -1  -1   1   1   1];   % +1 same direction as the model
+arm_offset_deg = [ 0 180  90   0   0   0];   % added after the sign, degrees
+
+% FIRMWARE RANGES, limits[] / otherLimits[] in ROME_Teensy_Code.ino. The
+% command is capped to these in ROMECommand (arm_clamp) after the map above,
+% so nothing outside them is ever sent. The wheel command is capped
+% separately in CommandGuard (max_rpm, scaled as a vector).
+arm_fw_lo = [-180    0    1 -165  -90 -170];  % firmware degrees
+arm_fw_hi = [ 160  132  141  165   90  180];
+arm_fw_margin_deg = 2.0;    % cap stays this far inside BOTH ends of every
+                            % joint, so a calibration off by this much still
+                            % never reaches a switch. -90..90 becomes -88..88.
 
 %% ========================================================================
 %  Below here is the formulation. Leave it alone.
@@ -82,11 +92,19 @@ dt_9dof   = 0.05;   % solver step AND the UKDynamics dt input (s). 20 Hz,
                     % matching DT_PID in MatlabPIDLoop.ino. At this step
                     % test_uk_block gave 2.829e-03 m EE RMSE on its own
                     % test trajectory (docs/HARDWARE_IMPLEMENTATION.md H1).
-z_work    = 0.42;   % end-effector working height above the table (m).
+z_work    = 0.32;   % end-effector working height above the floor (m).
+                    % Tool points DOWN (EndEffectorTrajectory), wrist just
+                    % below the shoulder (0.369 m): the old 0.42 mirrored.
                     % test_uk_block started the EE at [0.220 0 0.420].
                     % manip is checked over a full lap before a new value
                     % is adopted.
-arm_home  = deg2rad([-3.0; -53.0; -10.0; 0.0; -27.0; 0.0]);
+arm_home  = deg2rad([-3.0; 127.0; -10.0; 0.0; -27.0; 0.0]);
+                    % Elbow up and forward, forearm down, tool pointing at
+                    % the floor. This is the previous start (J2 = -53, which
+                    % the AR3 cannot reach) turned 180 deg about the
+                    % shoulder axis, so its conditioning s = 0.68 carries
+                    % over. Inside every firmware range: J2 127 -> fw 53,
+                    % J3 -10 -> fw 100, J5 -27.
                     %   6x1 calibration home AND null-space posture target
                     %   (rad). Chosen so the end effector sits AT working
                     %   height: the previous value put it at z = -0.017 m,
@@ -233,9 +251,10 @@ fprintf('  Arm     %s deg\n', num2str(rad2deg(q0_9dof(4:9)).', '%+8.2f'));
 fprintf('  Rates   all zero. Let it sit still before you start.\n');
 fprintf('\n  Order: place base -> CAL_ARM -> EnableHardware = 1.\n');
 fprintf('  The model drives the arm to the angles above by itself during\n');
-fprintf('  the 10 s start hold. arm_sign / arm_offset_deg must be measured\n');
-fprintf('  first (GETTING_STARTED.md step 3); with the defaults the firmware\n');
-fprintf('  rejects J2. Model J2 = 0 is the arm hanging straight down.\n');
+fprintf('  the 10 s start hold. arm_sign / arm_offset_deg are derived from\n');
+fprintf('  the AR3 files, not measured: run the jog test, GETTING_STARTED.md\n');
+fprintf('  step 3, before EnableHardware = 1. Joint commands are capped to\n');
+fprintf('  the firmware ranges, wheels to max_rpm.\n');
 fprintf('==========================================\n\n');
 
 % Safety Check

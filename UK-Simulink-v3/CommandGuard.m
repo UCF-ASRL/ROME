@@ -20,12 +20,12 @@ function [wheel_out, joint_out, guard_flag] = CommandGuard(wheel_in, joint_in, m
 %        the achievable set satisfies -w1 + w2 - w3 + w4 = 0; clipping one
 %        wheel breaks that and the wheels fight each other. Scaling keeps the
 %        direction of motion and only slows it.
-%     3. Joint commands pass through when finite. They are NOT clamped to
-%        joint limits: the limits in AR3Serial.m are inconsistent and its own
-%        limit check is commented out, so there is no trustworthy bound to
-%        apply. Clamping to an invented range would be worse than passing the
-%        value the solve asked for. This is why the arm is not driven from
-%        this model until the limits are re-derived.
+%     3. Joint commands pass through when finite. They are capped later, in
+%        ROMECommand (arm_clamp), AFTER the model-to-firmware map, against the
+%        firmware ranges limits[] / otherLimits[] of ROME_Teensy_Code.ino,
+%        pulled in by arm_fw_margin_deg. The cap has to sit after the map
+%        because the model's joint zero is not the firmware's
+%        (define_constants, ARM JOINT CONVENTION).
 %
 %   INPUTS
 %     wheel_in   4x1  commanded wheel speeds from UKDynamics (rev/min)

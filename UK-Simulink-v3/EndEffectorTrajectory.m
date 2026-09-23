@@ -149,9 +149,14 @@ p_des = [pos(1); pos(2); z_work];   % 3x1 world position (m). The path is
 %% ------------------------------------------------------------- attitude
 % Point at the chief, which sits at the origin.
 psi = atan2(-p_des(2), -p_des(1));      % desired yaw (rad)
-u_des = [cos(psi/2); 0; 0; sin(psi/2)]; % 4x1 quaternion, scalar first. A
-                                        %   pure yaw, so only the scalar and
-                                        %   z components are non-zero.
+% Tool z points DOWN at the floor: R = Rz(psi) * Rx(pi). With the tool up
+% every start the AR3 can physically take is badly conditioned (s <= 0.38,
+% all five laps diverge, 22 Sep 2026); pointing it down is the same arm
+% chain turned 180 deg about the shoulder axis, which keeps the tested
+% conditioning (s = 0.68) and puts the elbow above the shoulder where the
+% real arm can be. As a quaternion, scalar first:
+%   [c; 0; 0; s] (x) [0; 1; 0; 0] = [0; c; s; 0],   c = cos(psi/2), s = sin(psi/2)
+u_des = [0; cos(psi/2); sin(psi/2); 0]; % 4x1 quaternion, scalar first
 
 % Analytic d/dt of atan2(y,x) = (x ydot - y xdot)/(x^2 + y^2). The pi offset
 % between the outward bearing and the inward one differentiates away, so the
