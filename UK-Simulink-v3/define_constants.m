@@ -1,3 +1,49 @@
+%% ========================================================================
+%  EDIT THIS BLOCK. NOTHING ELSE IN THIS FILE NEEDS TOUCHING.
+%  ========================================================================
+
+scenario = 4;          % 1 ellipse | 2 V-bar | 3 R-bar | 4 NMC | 5 circle
+
+EnableHardware = 0;    % 0 simulate only. 1 commands the real robot.
+EnableMotive   = 0;    % 0 closes the loop on the model's own state.
+                       % 1 closes it on the cameras. THIS IS THE LAB MODE.
+
+% HOW THE RUN IS MEANT TO WORK
+% Four cameras watch a rectangular area. The robot is placed anywhere inside
+% it, the cameras report where it is, and the only thing commanded is the end
+% effector: the solve decides how base and arm share the job. That is the
+% whole point of the formulation, so in the lab EnableMotive = 1 and the base
+% pose is MEASURED, never typed.
+%
+% base_override below is the fallback for when the cameras are not running --
+% bench testing, or a dry run at a desk. Leave it NaN and the start pose is
+% computed: inverse kinematics puts the end effector on the reference at
+% t = 0, screened so the solve is well conditioned there. That is what the
+% five case studies are verified against.
+%
+% With EnableMotive = 1 this is ignored: the cameras win.
+base_override = [NaN; NaN; NaN];        % [x (m); y (m); yaw (deg)]
+
+% SPEED AND SIZE. These apply to EVERY scenario, on top of whatever that
+% scenario was designed around, so one number slows the whole set down.
+%
+%   speed_factor  1.0 = as designed.  0.5 = half speed, so twice the lap time.
+%   size_factor   1.0 = as designed.  0.5 = half the orbit, half the floor.
+%
+% Size costs nothing in timing: dist_scale is a pure spatial similarity
+% (EndEffectorTrajectory scales mu by dist_scale^3), so shrinking the orbit
+% leaves the lap time alone and only reduces how far and how fast the base
+% has to travel.
+%
+% The defaults below are deliberately slow for a first run. Turn them up one
+% step at a time, re-running gate_all each time.
+speed_factor = 0.50;   % of the designed speed
+size_factor  = 0.50;   % of the designed size
+
+%% ========================================================================
+%  Below here is the formulation. Leave it alone.
+%  ========================================================================
+
 % Define constants used throughout the model
 % This file is run once automatically when the project is opened
 % Run this file again after making any changes to update the workspace
@@ -12,69 +58,72 @@ Izz = (1/12)*m*(d^2+w^2); % base moment of interia
 alphas = [deg2rad(315), deg2rad(225), deg2rad(135), deg2rad(45)]; % angle to each wheel from positive y-axis
 
 %% Execution Flags
-EnableHardware = 0;
-EnableMotive = 0;
 
 %% 9-DOF integration (Part H)
 dt_9dof   = 0.05;   % solver step AND the UKDynamics dt input (s). 20 Hz,
-                    % matching DT_PID in MatlabPIDLoop.ino. Validated in H1:
-                    % 2.829e-03 m EE RMSE, 21.6 rpm peak.
+                    % matching DT_PID in MatlabPIDLoop.ino. At this step
+                    % test_uk_block gave 2.829e-03 m EE RMSE on its own
+                    % test trajectory (docs/HARDWARE_IMPLEMENTATION.md H1).
 z_work    = 0.42;   % end-effector working height above the table (m).
                     % test_uk_block started the EE at [0.220 0 0.420].
                     % manip is checked over a full lap before a new value
                     % is adopted.
-arm_home  = [0.0; -0.5; 0.9; 0.0; 0.7; 0.0];
+arm_home  = deg2rad([-3.0; -53.0; -10.0; 0.0; -27.0; 0.0]);
+                    %   6x1 calibration home AND null-space posture target
+                    %   (rad). Chosen so the end effector sits AT working
+                    %   height: the previous value put it at z = -0.017 m,
+                    %   below the table, which is why a run starting from
+                    %   home had a 0.44 m error and diverged. This posture
+                    %   is within a few degrees of the IK start for four of
+                    %   the five scenarios.
                     % 6x1 starting arm posture (rad), from rome_9dof_uk.m.
                     % Inside the workspace and AWAY FROM THE STRETCHED
                     % SINGULARITY. A straight arm sits on that singularity,
                     % so the run does not start there.
-EnableArm = 0;      % gate the arm serial sink, independent of EnableHardware
-k_th = 0.4; % heading posture stiffness (1/s^2). This gain, not the
-            % lap time, sets the peak wheel speed: the peak comes
-            % from the heading capture transient. 1.0 peaks at
-            % 119.7 rpm against the 120 rpm firmware ceiling;
-            % 0.4 peaks at 98.7 rpm. Start low on hardware.
-            % Sweep it with sweep_kth.
+max_rpm   = 120;    % firmware ceiling, MAX_RPM in MatlabPIDLoop.ino (rev/min).
+                    % CommandGuard saturates the wheel command to this before
+                    % it reaches ROMECommand.
+EnableArm = 0;      % used by check_9dof and build_9dof only; the model has
+                    % no separate arm sink (ROMECommand sends both)
 
-% FRAME / PLACEMENT WARNING. The heading task points the vehicle at
-% the origin using th_ref = atan2(-q(2), -q(1)), i.e. the MATHS
-% convention, 0 = +x. InitialConditions seeds the integrator with
-% q0(3) = 0, so model heading zero IS world +x, and:
-%
-%     THE ROBOT MUST BE PLACED POINTING ALONG WORLD +x AT t = 0.
-%
-% Nothing measures or corrects a placement error: the base has no
-% heading feedback until Stage 2 closes the OptiTrack loop.
-%
-% The heading_offset = -pi/2 inside OrbitTrajectory and
-% InitialConditions (robot 0 = North vs maths 0 = East) is DEAD CODE
-% today, because both blocks zero their theta output. If those
-% commented-out -theta lines are ever restored, that offset and the
-% heading task will disagree by pi/2 and in sign. See
-% docs/HARDWARE_IMPLEMENTATION.md Part F 1.4 and Part A6.
+% PLACEMENT. With EnableMotive = 0 the loop closes on the delayed command,
+% so the robot must physically start at q0_9dof (base x, y, theta and the
+% six joints), computed at the end of this file.
 
 
 
-%% Case study selection (Part H)
-% 1 circle | 2 V-bar | 3 R-bar | 4 NMC | 5 elliptical orbit
-% Change this one number to switch case study. scenario_defaults supplies the
-% manuscript parameters and the tabletop scaling for whichever is selected.
-scenario = 1;
-[par, dist_scale, time_scale, T_scaled] = scenario_defaults(scenario);
-
-%% Orbit Parameters
+%% Orbit Parameters (scenario 1)
 % Orbital Elements [a, e, i, Omega, omega, nu0]
-elements = [10, 0.5, 0, 0, 0, 0];
-mu = 1.0;
-% Elements: [a, e, i, Omega, omega, nu0]
+elements   = [1.4, 0.5, 0, 0, 0, 0];
+mu         = 1.0;
+
+
 a = elements(1);
 e = elements(2);
 inc_deg = rad2deg(elements(3));
 nu0_deg = rad2deg(elements(6));
 
 %Time Calculations
-T_physical = 2 * pi * sqrt(a^3 / mu);
-T_physical = 2*pi*sqrt(a^3/mu);   % unscaled orbit period (s)
+T_physical = 2*pi*sqrt(a^3/mu);      % unscaled orbit period (s)
+
+%% Case study selection
+% 1 elliptical orbit | 2 V-bar | 3 R-bar | 4 NMC | 5 circle
+% Scenario 1 flies the orbit defined above. Scenarios 2 to 5 take the
+% manuscript parameters and their tabletop scaling from scenario_defaults.
+if scenario == 1
+    par = [0 0 0 0];
+    D_s = 1.00;                 % scenario 1 as designed
+    S_s = 0.40;
+    tf_s = T_physical / S_s;
+else
+    [par, D_s, S_s, tf_s] = scenario_defaults(scenario);
+end
+
+% Apply the two user factors uniformly. tf scales inversely with S because a
+% lap is tf = (orbit period)/S for every scenario.
+time_scale = S_s  * speed_factor;
+dist_scale = D_s  * size_factor;
+T_scaled   = tf_s / speed_factor;
 
 % Distance Calculations (Projected onto the floor)
 % Max distance from center occurs at apogee: r = a(1+e)
@@ -87,7 +136,34 @@ max_dist_projected = max_dist_3d;
 % the orbital elements, the scaling, z_work or arm_home change. Carrying
 % them as literals would let them go stale without any sign.
 [q0_9dof, qd0_9dof] = scenario_seeds(scenario, elements, mu, ...
-                                     time_scale, dist_scale, z_work, arm_home);
+                                     time_scale, dist_scale, z_work, arm_home, dt_9dof);
+
+% START FROM REST. scenario_seeds returns pinv(Jc)*V_des(0) as the start rate,
+% nonzero in all nine coordinates and 0.166 m/s on base y. Nothing placed on a
+% floor is already moving at 17 cm/s, so carrying that into the model makes the
+% simulation disagree with the robot from the first step, and makes the printed
+% startup card untrue.
+%
+% Measured by ic_factors, all five scenarios, starting from rest:
+%   peak wheel speed 2.7 to 116.1 rpm, all under the ceiling, none diverging.
+% The start rate is worth a few rpm; it is the ARM POSE that matters, which is
+% why the card prints the joint angles and says not to skip them.
+qd0_9dof = zeros(9,1);
+
+% BASE OVERRIDE. If the user gave a measured placement, move the base there and
+% re-solve the arm for it, so the end effector still starts on the reference.
+% Re-solving matters: keeping the seed's arm angles under a different base pose
+% puts the end effector somewhere else entirely, and ic_factors showed a 0.44 m
+% offset is enough to diverge.
+if ~any(isnan(base_override)) && ~EnableMotive
+    q0_9dof(1) = base_override(1);
+    q0_9dof(2) = base_override(2);
+    q0_9dof(3) = deg2rad(base_override(3));
+    [p_ref0, u_ref0] = EndEffectorTrajectory(0, scenario, elements, mu, ...
+                                             time_scale, dist_scale, z_work, par);
+    q0_9dof = ik9_warm_start(q0_9dof, p_ref0, u_ref0);
+    q0_9dof(1:3) = [base_override(1); base_override(2); deg2rad(base_override(3))];
+end
 
 % Printout
 fprintf('\n==========================================\n');
@@ -108,6 +184,39 @@ fprintf('  Distance Scale:       %.2f\n', dist_scale);
 fprintf('  MAX REAL DISTANCE:    %.2f meters\n', max_dist_projected);
 fprintf('  Required Workspace:   %.2f x %.2f meters\n', ...
         max_dist_projected*2, max_dist_projected*2);
+fprintf('==========================================\n\n');
+
+% ---------------------------------------------------------------- STARTUP
+% Where the robot has to be before the run starts, in the units the hardware
+% takes. Printed because the numbers change with scenario, dist_scale,
+% time_scale, z_work and arm_home, and a stale copy taped to the bench is
+% worse than none.
+%
+% WHY THE ARM POSE MATTERS AND THE START RATE DOES NOT.
+% Measured by ic_factors over all five scenarios:
+%
+%   arm at these angles, robot at rest      works, peak 2.7 to 122.3 rpm
+%   arm at these angles, seeded start rate  works, peak 2.5 to  92.8 rpm
+%   arm at arm_home, robot at rest          DIVERGES, step 19 to 32
+%   arm at arm_home, seeded start rate      DIVERGES, step 18 to 32
+%
+% So starting from rest is fine; starting with the arm at its calibrated home
+% is not. At arm_home the end effector sits 0.44 m off the reference, and the
+% base cannot close that while the reference is already running. Adding a
+% fake initial velocity does NOT fix it -- row four above is that experiment.
+% Command the arm to the angles below first, as an ordinary joint move, then
+% start tracking.
+fprintf('==========================================\n');
+fprintf('      PLACE THE ROBOT LIKE THIS           \n');
+fprintf('==========================================\n');
+fprintf('  Base    x %+7.3f m   y %+7.3f m   yaw %+7.2f deg\n', ...
+        q0_9dof(1), q0_9dof(2), rad2deg(q0_9dof(3)));
+fprintf('  Arm     %s deg\n', num2str(rad2deg(q0_9dof(4:9)).', '%+8.2f'));
+fprintf('  Rates   all zero. Let it sit still before you start.\n');
+fprintf('\n  Order: place base -> CAL_ARM -> command the arm angles above\n');
+fprintf('         -> confirm it is at rest -> EnableHardware = 1\n');
+fprintf('  The arm angles are a plain joint move. Do NOT skip them: at\n');
+fprintf('  arm_home the end effector is 0.44 m off and the run diverges.\n');
 fprintf('==========================================\n\n');
 
 % Safety Check

@@ -4,9 +4,9 @@ function verify_scenarios()
 %
 %   Checks, in order:
 %     1  scenario 1 (ellipse) still reproduces OrbitTrajectory exactly
-%     2  V-bar holds the radial coordinate identically zero, Eq. (24)
-%     3  R-bar holds the in-track coordinate identically zero, Eq. (25)
-%     4  NMC keeps the 2:1 in-track to radial axis ratio, Eq. (26)
+%     2  V-bar holds the radial coordinate identically zero, Eq. (23)
+%     3  R-bar holds the in-track coordinate identically zero, Eq. (24)
+%     4  NMC keeps the 2:1 in-track to radial axis ratio, Eq. (25)
 %     5  NMC satisfies the UNFORCED Clohessy-Wiltshire equations exactly.
 %        The manuscript states this is what makes it a natural motion, so it
 %        is the strongest available check on the reference.
@@ -50,20 +50,20 @@ tt = linspace(0, 100, 400);   r_max = 0;  err = 0;
 for t = tt
     [p,~,V] = EndEffectorTrajectory(t, 2, elements, mu, S, D, zw, VB);
     r_max = max(r_max, abs(p(1)));
-    err   = max(err, abs(p(2) - (VB(1) - VB(2)*t)));   % against Eq. (24)
+    err   = max(err, abs(p(2) - (VB(1) - VB(2)*t)));   % against Eq. (23)
 end
 fails = fails + rep('V-bar radial identically zero', r_max, 1e-14, r_max);
-fails = fails + rep('V-bar in-track matches Eq. (24)', err, 1e-12, err);
+fails = fails + rep('V-bar in-track matches Eq. (23)', err, 1e-12, err);
 
 %% 3 -- R-bar: in-track identically zero
 i_max = 0;  err = 0;
 for t = tt
     [p,~,~] = EndEffectorTrajectory(t, 3, elements, mu, S, D, zw, RB);
     i_max = max(i_max, abs(p(2)));
-    err   = max(err, abs(p(1) - (RB(1) - RB(2)*t)));   % against Eq. (25)
+    err   = max(err, abs(p(1) - (RB(1) - RB(2)*t)));   % against Eq. (24)
 end
 fails = fails + rep('R-bar in-track identically zero', i_max, 1e-14, i_max);
-fails = fails + rep('R-bar radial matches Eq. (25)', err, 1e-12, err);
+fails = fails + rep('R-bar radial matches Eq. (24)', err, 1e-12, err);
 
 %% 4 and 5 -- NMC geometry and CW satisfaction
 Tp = 2*pi/n_chief;  tt = linspace(0, Tp, 2000);

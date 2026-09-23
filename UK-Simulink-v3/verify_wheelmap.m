@@ -23,13 +23,31 @@ fprintf('  PASS - both address the same motors.\n\n');
 end
 
 function w = block_wheels(qd, th)
-% rome_wheels as UKDynamics runs it, with the workspace geometry.
+% The BLOCK's own wheel map, executed from the block's own source text.
+%
+% ukd_current.m is the verbatim copy of the UKDynamics chart. Its rome_wheels
+% local function is extracted here and written to a temporary file so it can
+% be called directly, with the workspace alphas. Re-typing the formula in this
+% file instead would compare the file with itself and could not catch a wrong
+% alpha ORDER -- the failure this check exists for, which sends each speed to
+% the diagonally opposite motor.
+%
+% rome_wheels is called rather than ukd_current as a whole because the block
+% reports speeds for its INTEGRATED rate qd_int, already advanced by qdd*dt;
+% that would compare two different velocities.
 evalc('define_constants');
-Rwb = [cos(th) sin(th) 0; -sin(th) cos(th) 0; 0 0 1];
-v_b = Rwb*qd(:);
-w = zeros(4,1);
-for i = 1:4
-    w(i) = (sin(alphas(i))*v_b(1) + cos(alphas(i))*v_b(2) + l*v_b(3))/r;
+src = fileread('ukd_current.m');
+src = strrep(src, char(13), '');   % CRLF-safe before searching
+i0  = strfind(src, 'function w = rome_wheels(');
+assert(~isempty(i0), 'verify_wheelmap:nofn', 'rome_wheels not found in ukd_current.m');
+tailsrc = src(i0:end);
+i1  = strfind(tailsrc, sprintf('\nend\n'));
+body = tailsrc(1:i1(1)+4);                    % up to and including its end
+tmp  = fullfile(tempdir, 'blk_wheelmap_probe');
+if ~isfolder(tmp), mkdir(tmp); end
+fid = fopen(fullfile(tmp, 'rome_wheels.m'), 'w');  fwrite(fid, body);  fclose(fid);
+addpath(tmp);  clean = onCleanup(@() rmpath(tmp));
+rehash path
+w = rome_wheels([0; 0; th], qd(:), r, l, alphas(:)) * (60/(2*pi));
 end
-w = w*(60/(2*pi));
-end
+

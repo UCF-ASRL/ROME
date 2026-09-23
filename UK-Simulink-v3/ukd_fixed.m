@@ -1,5 +1,8 @@
-function [q_cmd, qd_cmd, wheel_rpm, tau_arm, manip, resid] = ...
-         rome_uk_block(q_meas, qd_meas, p_des, u_des, V_des, A_des, dt, reset)
+% UKD_FIXED  Prototype of Step 2: UKDynamics with the damping triggered and
+% sized on s = sigma_min(Jc*M^(-1/2)). Everything else is the verbatim block.
+% Not wired into ROME_9DOF.slx.
+function [q_cmd, q_dot_cmd, wheel_speeds_rpm, tau_arm, manip, resid, s] = ...
+         ukd_fixed(q_meas, qd_meas, p_des, u_des, V_des, A_des, dt, reset, r, l, alphas, s0, lam0s)
 %#codegen
 %ROME_UK_BLOCK  Udwadia-Kalaba constraint solve, shaped for a Simulink MATLAB
 %Function block. Outputs POSITION commands.
@@ -12,9 +15,9 @@ function [q_cmd, qd_cmd, wheel_rpm, tau_arm, manip, resid] = ...
 %   otherwise unchanged. scenario_seeds.m also calls this file directly.
 %
 %   1. The arm DH table and link inertias are PLACEHOLDERS.
-%   2. The solve diverges if it starts at a wrist singularity (q5 = 0), where
-%      sigma_min(A M^(-1/2)) is small. Starting configurations are screened on
-%      that quantity by scenario_seeds; no damping value rescues such a start.
+%   2. The solve diverges if it starts at a wrist singularity (q5 = 0). The
+%      damping below is triggered by manip, which does not detect that case;
+%      see the correction plan in the derivation document (Step 3).
 %   3. Codegen compatibility is unverified: MATLAB Coder is not licensed on
 %      the machine where this was written. The block runs in interpreted
 %      mode.
@@ -48,18 +51,17 @@ function [q_cmd, qd_cmd, wheel_rpm, tau_arm, manip, resid] = ...
 %                    matrix S = Jc M^-1 Jc' is near singular (0.367 at a
 %                    q5 = 0 start that diverged). The governing quantity is
 %                    s = sqrt(lambda_min(S)).
-%     resid     1x1  ||A qddot - b||. At round-off level while A M^(-1/2) has
-%                    full row rank, which is the intended operating regime.
+%     resid     1x1  ||A qddot - b||. Rises near a singularity because the
+%                    damping is trading constraint satisfaction for bounded
+%                    force. That is intended.
 %
-%   THE SOLVE
-%   The fundamental equation is evaluated as written,
+%   WHY THE SOLVE HAS NO MATRIX SQUARE ROOT
+%   The textbook fundamental equation carries M^(-1/2):
 %       qddot = a + M^(-1/2) (A M^(-1/2))^+ (b - A a)
-%   with M^(-1/2) from the spectral decomposition of M and the Moore-Penrose
-%   inverse. The square-root-free rearrangement
-%       M^(-1/2) B^+ = M^(-1) A' (A M^(-1) A')^-1,   B = A M^(-1/2)
-%   holds only while B has full row rank, and is a speed optimisation. Speed
-%   is not a constraint here: the robot runs at 20 Hz in simulation, so the
-%   block uses the form the literature states and the manuscript derives.
+%   With B = A M^(-1/2) of full row rank, B^+ = B'(BB')^-1, so
+%       M^(-1/2) B^+ = M^(-1) A' (A M^(-1) A')^-1
+%   and the square root cancels exactly. This block uses that form. It is
+%   algebraically identical, needs no eig, sqrtm or pinv, and is cheaper.
 %
 %   WHY A IS 6x9 AND NOT 9x9
 %   A square, invertible A collapses the solve to qddot = b regardless of M
@@ -110,19 +112,20 @@ bd  = 0.45;                     % base plate depth, along body x (m)
 bw  = 0.45;                     % base plate width, along body y (m)
 Ib  = (1/12)*mb*(bd^2 + bw^2);  % base yaw inertia (kg m^2), thin rectangular
                                 %   plate about its own vertical axis
-r_w = 0.0762;                   % omni-wheel rolling radius (m)
-l_w = 0.35;                     % base centre to wheel contact distance (m)
+r_w = r;                          % omni-wheel rolling radius (m)
+l_w = l;                          % base centre to wheel contact distance (m)
 h0  = 0.20;                     % height of arm joint 1 above the base (m)
-alph = deg2rad([315; 225; 135; 45]);   % angular location of each wheel on
-                                       %   the base (rad), listed in the
-                                       %   order of define_constants.m.
-                                       %   With the +sin map in rome_wheels
-                                       %   this equals the thesis order
-                                       %   45/135/225/315 with -sin, i.e.
-                                       %   the counter-clockwise tangent
-                                       %   (HARDWARE_IMPLEMENTATION.md E8).
-                                       %   The model block replaces it with
-                                       %   alphas from define_constants.m.
+alph = alphas(:);   % angular location of each wheel on
+                                       %   the base (rad). Used only when
+                                       %   this file is called directly.
+                                       %   The model block uses alphas from
+                                       %   define_constants.m, [315 225 135
+                                       %   45] deg, which with the +sin map
+                                       %   below addresses the same motors
+                                       %   as the 3-DOF model (verified by
+                                       %   verify_wheelmap; see
+                                       %   docs/HARDWARE_IMPLEMENTATION.md
+                                       %   section E8).
 
 % ---- PLACEHOLDER ARM DATA. Replace from the AR3 URDF in ONE place. ------
 % Standard Denavit-Hartenberg table, one row per joint, columns:
@@ -194,17 +197,12 @@ posture = [0.10; 0.0; -0.5; 0.9; 0.0; 0.7; 0.0];
                                     % preferred configuration,
                                     %   [base yaw; joints 1..6] (rad)
 
-% No damping is applied. The solve below is the fundamental equation as
-% written, with the Moore-Penrose inverse, which is the form used by Udwadia
-% and Kalaba (1996), by Peters et al. (2005) under the dynamically consistent
-% metric N = M^-1, and by Pothen et al. (2022) for spacecraft pose tracking.
-% Damped least squares was measured to be unnecessary over the five case
-% studies: the smallest singular value of A M^(-1/2) stays above 0.40 on every
-% feasible run (sweep_formulation), against the 0.30 screening threshold in
-% scenario_seeds. Starting configurations below it are rejected before the run
-% instead, because no damping value rescues them
-% (the command stays finite for a step or two, leaves the branch, then grows;
-% measured in sweep_formulation and in the derivation document).
+% Damped least squares schedule. Damping switches on only as the arm nears a
+% singularity, trading exact constraint satisfaction for a bounded command.
+w0   = 0.10;                        % manipulability at which damping starts
+                                    %   (mixed units, see 'manip' above)
+lam0 = 0.04;                        % damping factor at zero manipulability
+                                    %   (same mixed units)
 hfd  = 1e-6;                        % central-difference step for numerical
                                     %   derivatives. When perturbing a single
                                     %   coordinate the step is hfd itself, in
@@ -234,11 +232,7 @@ if reset ~= 0 || ~started
 end
 
 q  = q_meas;    % configuration used this step (m, rad). Taken from the
-                %   q_meas INPUT. In the shipped model that input is the
-                %   StateSource switch: with EnableMotive = 0 it is this
-                %   block's own q_cmd delayed one step, so the loop closes on
-                %   the simulated state, not on a measurement. It closes on
-                %   the real pose only when EnableMotive = 1, never yet run.
+                %   MEASUREMENT, so the task loop closes on the real pose.
 qd = qd_int;    % rates used this step (m/s, rad/s). Taken from the
                 %   INTEGRATOR, not from differencing the measurement, which
                 %   at 20 Hz would be dominated by differentiation noise.
@@ -260,7 +254,7 @@ qd = qd_int;    % rates used this step (m/s, rad/s). Taken from the
 %             same column units as Jv and Jw above.
 [Jv, Jw, Jc]     = rome_jac(q, Tl, pc, pe, h0);
 
-M = rome_mass(Jv, Jw, Tl, link_m, link_c, link_I, mock_m, mock_c, mock_I, mb, Ib);
+M = rome_mass(Jv, Jw, Tl, link_m, link_I, mock_m, mock_I, mb, Ib);
                 % 9x9 mass matrix. Units are mixed by construction:
                 %   kg in the translation block, kg m in the coupling,
                 %   kg m^2 in the rotation block.
@@ -293,39 +287,13 @@ end
 C_qd = Mdot_qd - dTdq;      % 9x1 Coriolis and centrifugal generalized force
                             %   (N in translation rows, N m in rotation rows)
 
-% Unconstrained applied force, plus the null-space posture bias. While
-% B = A M^(-1/2) has full row rank, B*pinv(B) = I and the task rows are met
-% exactly whatever Q is, so the posture term only selects which null-space
-% motion happens. If B loses rank that projection is no longer the identity
-% and the achieved acceleration does depend on Q, which is a further reason
-% the starting configuration is screened on sigma_min(B).
+% Unconstrained applied force, plus the null-space posture bias. UK enforces
+% the task rows exactly whatever Q is, so the posture term cannot disturb
+% the task; it only selects which null-space motion happens.
 Q = -C_qd - g;              % 9x1 applied generalized force before the
                             %   constraint (N, N m)
-% Posture bias on base yaw and the six joints: a spring-damper toward
-% 'posture', applied as an ordinary generalized force. kpost is a stiffness in
-% N m/rad and 2*sqrt(kpost) a damping in N m s/rad; that pair is critically
-% damped only for a unit generalized inertia, which no coordinate here has
-% (M runs from 1.0e-3 kg m^2 on the wrist to 0.81 kg m^2 on base yaw), so the
-% damping ratio varies by coordinate. What is measured is that the null-space
-% motion stays bounded and joint travel falls from 13.76 rad to 2.26 rad.
-%
-% WHY THIS IS A FORCE AND NOT M TIMES AN ACCELERATION.
-% Peters, Mistry, Udwadia, Nakanishi and Schaal (2005), Section IV, stabilize
-% the null space with u0 = M (KP0 (q_rest - q) - KD0 qdot), i.e. the PD is a
-% desired acceleration carried into force through M. Both forms were run
-% through this block by compare_posture:
-%
-%   posture form              residual      joint travel   min s
-%   force (this line)         1.8-4.2e-11   0.91-3.14 rad  0.67-0.68
-%   M * PD, full M            1e93-1e145    diverges       0
-%   M(3:9,3:9) * PD           0.7-4.5e-12   6.20-6.95 rad  0.1555 on R-bar
-%
-% The full-M form diverges in all five case studies because M is not block
-% diagonal: multiplying a posture PD by M pushes force into the free base
-% translation rows, which Peters' fixed-base arm does not have. Restricting
-% it to rows 3:9 removes the divergence but triples joint travel and drops
-% R-bar conditioning to 0.1555, below the 0.30 that scenario_seeds screens
-% starts on. The force form is kept for that reason, not by oversight.
+% Posture bias on base yaw and the six joints, as a critically damped spring
+% toward 'posture'. The damping 2*sqrt(kpost) is critical for a unit inertia.
 Q(3:9) = Q(3:9) - kpost*(q(3:9) - posture) - 2*sqrt(kpost)*qd(3:9);
 
 %% ---------------------------------------------------------- CONSTRAINT
@@ -358,80 +326,30 @@ V   = Jc*qd;    % 6x1 current end effector twist (m/s, rad/s)
 b   = A_des - KD.*(V - V_des) - KP.*e_task - Jcd*qd;
                 % 6x1 constraint right-hand side: the twist derivative the
                 %   PD law asks for (m/s^2, rad/s^2)
-%
-% THIS IS POTHEN'S CONSTRAINT FORM.
-% With Jc*qddot = b and Vdot = Jc*qddot + Jcd*qd, writing Phi = e_task (actual
-% minus desired, so Phi_dot = V - V_des and Phi_ddot = Vdot - A_des) the line
-% above rearranges to
-%
-%     Phi_ddot + KD Phi_dot + KP Phi = 0,
-%
-% which is Eq. (57) of Pothen, Crain and Ulrich (2022) with alpha = KD and
-% gamma = KP. They require alpha and gamma to be positive definite diagonal;
-% KP = [wp^2 x3, wr^2 x3] and KD = [2wp x3, 2wr x3] are, so their Lyapunov
-% argument (their Eqs. 58-61) covers this constraint.
-%
-% What does NOT carry over is the attitude error. Their orientation constraint
-% is a POINTING constraint -- their Eq. (8) aligns a body-fixed boresight with
-% the target's point of interest, and their generalized coordinates include
-% the quaternion components themselves. e_task(4:6) here is a full three-axis
-% attitude error, sgn(du0)*du_v, over joint coordinates. Same attractor, a
-% different thing being driven to zero.
 
 %% -------------------------------------------------------------- SOLVE
 a  = M\Q;       % 9x1 UNCONSTRAINED acceleration, what the system would do
                 %   if the task constraint vanished (m/s^2, rad/s^2)
-
-% Fundamental equation of constrained motion, evaluated as written:
-%
-%     qddot = a + M^(-1/2) ( A M^(-1/2) )^+ ( b - A a )
-%
-% M is symmetric positive definite, so M^(-1/2) comes from its spectral
-% decomposition. The Moore-Penrose inverse is what defines the solution when
-% A M^(-1/2) is not full row rank: it returns the least-squares solution of
-% smallest norm.
-% Spectral decomposition of M. M is symmetric positive definite, so its
-% eigenvalues and eigenvectors are real; inside a MATLAB Function block eig
-% cannot be shown to be real for a general matrix, so the real part is taken
-% explicitly. Without that the block fails type inference at build time.
-Msym = 0.5*(M + M.');               % 9x9 symmetric part (M is SPD already)
-[Vq, Dq] = eig(Msym);               % Msym = Vq*Dq*Vq', Dq diagonal
-Vq  = real(Vq);
-dq  = real(diag(Dq));
-dq  = max(dq, max(dq)*9*eps);       % floor relative to the largest eigenvalue,
-                                    %   not at absolute eps, because the
-                                    %   eigenvalues span 1e-3 to 22 here.
-                                    %   DEFENSIVE ONLY: check_mass_floor
-                                    %   walks all five case studies and finds
-                                    %   min eig(M) = 7.72e-04 against a floor
-                                    %   of 4.31e-14, so it never activates.
-                                    %   M stays positive definite throughout,
-                                    %   cond(M) peaking near 2.8e4. The
-                                    %   singular mass matrix formulations of
-                                    %   Udwadia and Phohomsiri (2006) and
-                                    %   Udwadia and Mogharabin (2023) are
-                                    %   therefore NOT what this implements;
-                                    %   they would be needed only if M lost
-                                    %   rank, which it does not.
-Mih = Vq*diag(1.0./sqrt(dq))*Vq.';  % 9x9 M^(-1/2), symmetric
-B   = Jc*Mih;                       % 6x9 A M^(-1/2), the matrix inverted
-qdd = a + Mih*(pinv(B)*(b - Jc*a));
-                % 9x1 constrained acceleration (m/s^2, rad/s^2)
+JM = M\(Jc.');  % 9x6 M^-1 A', the mass-weighted constraint directions
+S  = Jc*JM;     % 6x6 A M^-1 A', the constraint-space inverse inertia
 manip = sqrt(max(det(Jc*Jc.'), 0.0));
-                % 1x1 Yoshikawa manipulability of Jc, REPORTED ONLY. It
-                %   weights base and arm columns equally and does not see a
-                %   wrist singularity: it read 0.367 at a start that diverged.
-                %   The quantity that bounds the correction is
-                %   sigma_min(B) = sqrt(lambda_min(A M^-1 A')), checked before
-                %   the run by scenario_seeds and after it by check_9dof.
+                % 1x1 Yoshikawa manipulability, reported only
+s = sqrt(max(min(eig((S + S.')/2)), 0.0));
+                % 1x1 smallest singular value of Jc*M^(-1/2), Eq. (30)
+if s < s0
+    lam2 = lam0s^2*(1 - s/s0)^2;     % squared damping on the solve metric
+else
+    lam2 = 0.0;                      % far from a singularity: no damping,
+                                     %   so the constraint is met exactly
+end
+qdd = a + JM*((S + lam2*eye(6))\(b - Jc*a));
+                % 9x1 constrained acceleration (m/s^2, rad/s^2)
 resid = norm(Jc*qdd - b);
                 % 1x1 constraint residual. Like manip, this norm runs over
                 %   rows with different units, three in m/s^2 and three in
                 %   rad/s^2, so its absolute value is not a physical
-                %   quantity. Use it as a relative health signal only. With
-                %   the pseudoinverse and no damping it sits at round-off
-                %   while A M^(-1/2) has full row rank, and rises only if the
-                %   constraint rows become inconsistent or rank deficient.
+                %   quantity. Use it as a relative health signal only. It is
+                %   nonzero only when lam2 > 0, which is the intended trade.
 
 %% ---------------------------------------------------- INTEGRATE, OUTPUT
 % Semi-implicit (symplectic) Euler: the rate is updated FIRST, then the
@@ -440,23 +358,14 @@ resid = norm(Jc*qdd - b);
 qd_int = qd_int + qdd*dt;   % advance rate command (m/s, rad/s)
 q_int  = q_int  + qd_int*dt;% advance position command (m, rad)
 q_cmd  = q_int;             % 9x1 position command out (m, rad)
-qd_cmd = qd_int;            % 9x1 rate command out (m/s, rad/s)
+q_dot_cmd = qd_int;            % 9x1 rate command out (m/s, rad/s)
 
 Qc      = M*qdd - Q;        % 9x1 generalized constraint force, the force the
                             %   constraint had to apply (N, N m). This is the
                             %   quantity UK gives you in closed form.
+tau_arm = Qc(4:9);          % 6x1 arm joint torques (N m), monitoring only
 
-% Actuator torque, for margin checks. Qc alone is NOT that torque: Q carries
-% the posture bias of the null-space term, so Qc = M qddot + C qdot + g + f_post
-% and the fictitious f_post is of the same order as the real joint torques
-% (measured at 0.85 of the gravity torque on the arm rows). The bias is
-% removed here so tau_arm is the torque an actuator would have to produce,
-%
-%     tau = M qddot + C qdot + g .
-tau_all = M*qdd + C_qd + g; % 9x1 generalized actuator force (N, N m)
-tau_arm = tau_all(4:9);     % 6x1 arm joint torques (N m), monitoring only
-
-wheel_rpm = rome_wheels(q, qd_int, r_w, l_w, alph)*(60/(2*pi));
+wheel_speeds_rpm = rome_wheels(q, qd_int, r_w, l_w, alph)*(60/(2*pi));
                             % 4x1 wheel speeds (rpm). The factor 60/(2*pi)
                             %   converts rad/s to rev/min.
 end
@@ -613,7 +522,7 @@ function [Jv, Jw, Jc] = rome_jac(q, Tl, pc, pe, h0)
 end
 
 
-function M = rome_mass(Jv, Jw, Tl, link_m, link_c, link_I, mock_m, mock_c, mock_I, mb, Ib)
+function M = rome_mass(Jv, Jw, Tl, link_m, link_I, mock_m, mock_I, mb, Ib)
 %#codegen
 %ROME_MASS  Mass matrix by the link-Jacobian sum.
 %
@@ -652,25 +561,12 @@ function M = rome_mass(Jv, Jw, Tl, link_m, link_c, link_I, mock_m, mock_c, mock_
         Ii = diag(link_I(i,:)); % 3x3 inertia of link i about its own CoM,
                                 %   in its own frame (kg m^2)
         if i == 6
-            % Mock spacecraft rigidly attached to link 6. The two bodies are
-            % treated as one, so both inertias are transferred to the COMBINED
-            % centre of mass by the parallel-axis theorem. Neglecting the
-            % transfer understates the combined inertia by 7.4e-4 kg m^2, which
-            % is 82 percent of the retained 9.0e-4, because the two centres of
-            % mass sit 0.08 m apart along the tool axis. rome_fk already places
-            % the combined centre of mass, so the inertia has to be referred to
-            % the same point or M is inconsistent with its own Jacobian.
+            % Mock spacecraft rigidly attached: masses add, inertias add.
+            % The parallel-axis term for the offset between the two centres
+            % of mass is neglected here because that offset is small; add it
+            % once real geometry is available.
             mi = link_m(6) + mock_m;    % combined mass (kg)
-            c6 = link_c(6,:).';         % 3x1 link 6 CoM in the link frame (m)
-            cm = mock_c;                % 3x1 payload CoM in the link frame (m)
-            cc = (link_m(6)*c6 + mock_m*cm)/mi;   % 3x1 combined CoM (m)
-            d6 = c6 - cc;               % 3x1 offsets from the combined CoM (m)
-            dm = cm - cc;
-            Ii = diag(link_I(6,:)) + diag(mock_I) ...
-                 + link_m(6)*((d6.'*d6)*eye(3) - d6*d6.') ...
-                 + mock_m  *((dm.'*dm)*eye(3) - dm*dm.');
-                                        % 3x3 combined inertia about the
-                                        %   combined CoM (kg m^2)
+            Ii = diag(link_I(6,:) + mock_I);    % combined inertia (kg m^2)
         end
         Ri  = Tl(1:3,1:3,i);    % 3x3 orientation of link i, world
         Jvi = Jv(:,:,i);        % 3x9 linear Jacobian of link i
@@ -692,7 +588,7 @@ function M = rome_mass_at(q, dh, link_m, link_c, link_I, mock_m, mock_c, ...
 %   configurations.
     [pe, ~, Tl, pc] = rome_fk(q, dh, link_m, link_c, mock_m, mock_c, h0);
     [Jv, Jw, ~]     = rome_jac(q, Tl, pc, pe, h0);
-    M = rome_mass(Jv, Jw, Tl, link_m, link_c, link_I, mock_m, mock_c, mock_I, mb, Ib);
+    M = rome_mass(Jv, Jw, Tl, link_m, link_I, mock_m, mock_I, mb, Ib);
 end
 
 
@@ -783,10 +679,11 @@ function Jd = rome_jdot(q, qd, dh, link_m, link_c, mock_m, mock_c, h0, hfd)
 %   Vdot = Jc qddot + Jcdot qdot, so the Jcdot qdot term has to be moved to
 %   the right-hand side to leave the constraint linear in qddot.
 %
-%   Jc is purely kinematic, but link_m, link_c, mock_m and mock_c remain in
-%   the signature because rome_fk needs them to place the link centres of
-%   mass. They do not enter Jc itself. No inertia table is declared privately
-%   here, so none can go stale.
+%   The mass parameters are NOT arguments: Jc is purely kinematic. An
+%   earlier version of this function declared a private copy of the inertia
+%   table, which would silently go stale whenever the parameters at the top
+%   of this file were edited. Only geometry is passed now, so that failure
+%   mode cannot recur.
     % Step ALONG the velocity direction, not along a coordinate axis: this
     % is a directional derivative, so two evaluations suffice.
     [pe1, ~, Tl1, pc1] = rome_fk(q + hfd*qd, dh, link_m, link_c, mock_m, mock_c, h0);

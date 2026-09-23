@@ -1,5 +1,9 @@
-function [q_cmd, qd_cmd, wheel_rpm, tau_arm, manip, resid] = ...
-         rome_uk_block(q_meas, qd_meas, p_des, u_des, V_des, A_des, dt, reset)
+% UKD_CURRENT  Verbatim copy of the UKDynamics block in ROME_9DOF.slx,
+% renamed so it can be driven outside Simulink. Do not edit; regenerate
+% with refresh_block_code, which writes this file from rome_uk_block.m
+% using the same transform that writes the chart.
+function [q_cmd, q_dot_cmd, wheel_speeds_rpm, tau_arm, manip, resid] = ...
+         ukd_current(q_meas, qd_meas, p_des, u_des, V_des, A_des, dt, reset, r, l, alphas)
 %#codegen
 %ROME_UK_BLOCK  Udwadia-Kalaba constraint solve, shaped for a Simulink MATLAB
 %Function block. Outputs POSITION commands.
@@ -110,10 +114,10 @@ bd  = 0.45;                     % base plate depth, along body x (m)
 bw  = 0.45;                     % base plate width, along body y (m)
 Ib  = (1/12)*mb*(bd^2 + bw^2);  % base yaw inertia (kg m^2), thin rectangular
                                 %   plate about its own vertical axis
-r_w = 0.0762;                   % omni-wheel rolling radius (m)
-l_w = 0.35;                     % base centre to wheel contact distance (m)
+r_w = r;                          % omni-wheel rolling radius (m)
+l_w = l;                          % base centre to wheel contact distance (m)
 h0  = 0.20;                     % height of arm joint 1 above the base (m)
-alph = deg2rad([315; 225; 135; 45]);   % angular location of each wheel on
+alph = alphas(:);   % angular location of each wheel on
                                        %   the base (rad), listed in the
                                        %   order of define_constants.m.
                                        %   With the +sin map in rome_wheels
@@ -440,7 +444,7 @@ resid = norm(Jc*qdd - b);
 qd_int = qd_int + qdd*dt;   % advance rate command (m/s, rad/s)
 q_int  = q_int  + qd_int*dt;% advance position command (m, rad)
 q_cmd  = q_int;             % 9x1 position command out (m, rad)
-qd_cmd = qd_int;            % 9x1 rate command out (m/s, rad/s)
+q_dot_cmd = qd_int;            % 9x1 rate command out (m/s, rad/s)
 
 Qc      = M*qdd - Q;        % 9x1 generalized constraint force, the force the
                             %   constraint had to apply (N, N m). This is the
@@ -456,7 +460,7 @@ Qc      = M*qdd - Q;        % 9x1 generalized constraint force, the force the
 tau_all = M*qdd + C_qd + g; % 9x1 generalized actuator force (N, N m)
 tau_arm = tau_all(4:9);     % 6x1 arm joint torques (N m), monitoring only
 
-wheel_rpm = rome_wheels(q, qd_int, r_w, l_w, alph)*(60/(2*pi));
+wheel_speeds_rpm = rome_wheels(q, qd_int, r_w, l_w, alph)*(60/(2*pi));
                             % 4x1 wheel speeds (rpm). The factor 60/(2*pi)
                             %   converts rad/s to rev/min.
 end

@@ -7,13 +7,13 @@ function [p_des, u_des, V_des, A_des] = EndEffectorTrajectory(t, scenario, ...
 %
 %   SCENARIO
 %     1  scaled elliptical orbit   the trajectory the 3-DOF model already flies
-%     2  V-bar approach            manuscript Eq. (24)
-%     3  R-bar approach            manuscript Eq. (25)
-%     4  natural-motion circumnav  manuscript Eq. (26)
+%     2  V-bar approach            manuscript Eq. (23), eq:vbar
+%     3  R-bar approach            manuscript Eq. (24), eq:rbar
+%     4  natural-motion circumnav  manuscript Eq. (25), eq:nmc
 %     5  circular path             the e = 0 special case of scenario 1
 %
 %   FRAME. Scenarios 2 to 4 are written in the chief-centred LVLH frame of
-%   manuscript Eq. (23): x radial outward (the R-bar axis), y in-track (the
+%   manuscript Eq. (21), eq:lvlh: x radial outward (the R-bar axis), y in-track (the
 %   V-bar axis), z orbit normal. The chief sits at the tabletop origin and the
 %   LVLH (x, y) plane maps onto the floor. The cross-track coordinate is
 %   identically zero in all three, so the end effector holds z_work.
@@ -29,7 +29,7 @@ function [p_des, u_des, V_des, A_des] = EndEffectorTrajectory(t, scenario, ...
 %
 %   INPUTS
 %     t           1x1  simulation time (s)
-%     scenario    1x1  selector, 1 to 4 as above
+%     scenario    1x1  selector, 1 to 5 as above
 %     elements    1x6  [a, e, i, Omega, omega, nu0] for scenario 1; a in m
 %                      (tabletop units), e dimensionless, angles in rad
 %     mu          1x1  scaled gravitational parameter for scenario 1 (m^3/s^2)
@@ -64,7 +64,14 @@ function [p_des, u_des, V_des, A_des] = EndEffectorTrajectory(t, scenario, ...
 % pos, vel, acc are 2x1 [radial; in-track] at the scenario's own scale.
 pos = zeros(2,1);   vel = zeros(2,1);   acc = zeros(2,1);
 
-ts = time_scale * t;        % scenario time after scaling (s)
+% HOLD AT THE START. The reference does not begin until t_hold has passed,
+% so the arm has time to drive itself to the start pose while the base sits
+% still. Before that the reference is frozen at its t = 0 value, which means
+% the end effector is being asked to go somewhere fixed rather than chase a
+% moving target. Without it the run has to begin with the arm already placed
+% by hand, which is not a thing anyone can do.
+T_HOLD = 10.0;              % seconds of hold before the path starts
+ts = time_scale * max(0.0, t - T_HOLD);   % scenario time after scaling (s)
 
 switch scenario
 
@@ -75,7 +82,7 @@ switch scenario
         [pos, vel, acc] = orbit_ref(ts, elements, mu, time_scale, dist_scale);
 
     case 2
-        % V-bar approach, Eq. (24). In-track closing at constant speed with
+        % V-bar approach, Eq. (23). In-track closing at constant speed with
         % the radial coordinate held identically zero. The radial hold is
         % what makes it non-trivial: the constraint supplies u_x = 2 n v0 to
         % oppose the Coriolis term that would otherwise drift the deputy.
@@ -85,7 +92,7 @@ switch scenario
         acc = [0;        0    ];
 
     case 3
-        % R-bar approach, Eq. (25). Radial descent with the in-track
+        % R-bar approach, Eq. (24). Radial descent with the in-track
         % coordinate held identically zero. More demanding than V-bar: the
         % natural radial acceleration 3 n^2 x points away from the chief and
         % opposes the descent, and a constant u_y = -2 n v0 holds y at zero.
@@ -95,7 +102,7 @@ switch scenario
         acc = [     0;      0];
 
     case 4
-        % Natural-motion circumnavigation, Eq. (26): the unforced 2:1 ellipse
+        % Natural-motion circumnavigation, Eq. (25): the unforced 2:1 ellipse
         % solution of the CW equations. The in-track semi-axis is exactly
         % twice the radial one. That ratio is not a choice; it is the
         % defining signature of unforced relative motion.
@@ -179,8 +186,17 @@ Omega = elements(4);   omega = elements(5);   nu0 = elements(6);
 
 a = a_raw * dist_scale;         % scaled semi-major axis (m)
 
+% The gravitational parameter is scaled with the cube of dist_scale so that
+% dist_scale is a pure spatial similarity: by Kepler's third law
+% T = 2*pi*sqrt(a^3/mu), scaling a by D and mu by D^3 leaves the period
+% unchanged, and the path is the D = 1 path scaled by D at the same clock.
+% Without this, D = 0.1 shortened the lap from 26.0 s to 0.82 s and the
+% reference asked for 1.85 m/s and 26 rad/s of yaw, which is what hardware
+% run 1 of 16 September 2026 commanded.
+mu_s = mu * dist_scale^3;       % similarity-scaled gravitational parameter
+
 p_semi = a * (1 - e^2);         % semi-latus rectum (m)
-n = sqrt(mu / a^3);             % mean motion (rad/s)
+n = sqrt(mu_s / a^3);           % mean motion (rad/s)
 
 E0 = 2 * atan(sqrt((1-e)/(1+e)) * tan(nu0/2));   % initial eccentric anomaly
 M0 = E0 - e*sin(E0);                             % initial mean anomaly (rad)
@@ -195,8 +211,8 @@ nu = 2 * atan2(sqrt(1+e)*sin(E/2), sqrt(1-e)*cos(E/2));   % true anomaly (rad)
 r_mag = p_semi / (1 + e*cos(nu));                         % radius (m)
 
 r_pqw = [r_mag*cos(nu); r_mag*sin(nu); 0];                % 3x1 position (m)
-v_pqw = sqrt(mu/p_semi) * [-sin(nu); e + cos(nu); 0] * time_scale;
-a_pqw = (-mu / r_mag^3) * r_pqw * (time_scale^2);
+v_pqw = sqrt(mu_s/p_semi) * [-sin(nu); e + cos(nu); 0] * time_scale;
+a_pqw = (-mu_s / r_mag^3) * r_pqw * (time_scale^2);
 
 cO = cos(Omega); sO = sin(Omega);
 co = cos(omega); so = sin(omega);

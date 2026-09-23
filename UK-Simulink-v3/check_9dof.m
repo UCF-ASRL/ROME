@@ -10,8 +10,20 @@ function R = check_9dof()
 %     peak wheel  < 120 rpm         MAX_RPM, MatlabPIDLoop.ino. NOTHING
 %                                   saturates between the block and the
 %                                   motors (defect E4), so the ceiling is hard
-%     min manip   > 0.25            test_uk_block measured 0.3177 from the
-%                                   arm_home posture
+%     min s       > 0.30            s = sigma_min(A M^-1/2) is the smallest
+%                                   singular value of the matrix the solve
+%                                   pseudo-inverts, so it measures the health
+%                                   of the quantity that actually fails. The
+%                                   three hardware runs of 16 September that
+%                                   diverged started at s = 0.05 to 0.16; the
+%                                   five case studies hold s >= 0.67
+%                                   throughout. 0.30 sits between the two,
+%                                   and no run has been observed in between,
+%                                   so the exact value is not yet pinned by
+%                                   data -- it is a margin, not a measured
+%                                   boundary. Manipulability is printed but
+%                                   NOT gated: it read 0.367 at a start whose
+%                                   run diverged.
 %     EE RMSE     < 1.5 * v_max * dt  transport-delay bound, derived below
 %
 %   NOT CHECKED, because the numbers do not exist in the repository:
@@ -80,7 +92,26 @@ fprintf('\n  ran %.2f s, %d steps at dt = %.3f s (%.0f Hz)\n', ...
 f = 0;
 o = R.max_res   < 1e-10; f=f+~o; fprintf('  %s constraint satisfied      max residual %.2e\n', tag(o), R.max_res);
 o = R.peak_rpm  < 120;   f=f+~o; fprintf('  %s wheel speed under ceiling peak %.1f rpm (max 120)\n', tag(o), R.peak_rpm);
-o = R.min_manip > 0.25;  f=f+~o; fprintf('  %s away from singularity     min manip %.4f\n', tag(o), R.min_manip);
+% Conditioning of the matrix the solve inverts, along the whole run:
+%
+%     s = sigma_min(Jc M^-1/2),    ||qddot - a|| <= ||M^-1/2|| ||b - A a|| / s
+%
+% computed here from the logged configurations, so it gates the run rather
+% than only the starting configuration that scenario_seeds screened. The
+% threshold is the screening value of scenario_seeds. Manipulability is
+% printed for continuity but is NOT gated: it read 0.367 at a start whose
+% run diverged, because it weights base and arm columns equally while the
+% solve weights them by M^-1.
+s_min_gate = 0.30;
+s_run = inf;
+for k = 1:N
+    [Mk, Jk] = mass_at(q(k,:).');
+    s_run = min(s_run, sqrt(max(min(eig(Jk*(Mk\Jk.'))), 0)));
+end
+R.min_s = s_run;
+o = R.min_s > s_min_gate;  f = f + ~o;
+fprintf('  %s away from singularity     min s %.4f (screening at %.2f), manip %.4f\n', ...
+        tag(o), R.min_s, s_min_gate, R.min_manip);
 % The command reaches the block one step late by construction: q_cmd returns
 % to q_meas through a Unit Delay. At 20 Hz that is 50 ms, so a reference
 % moving at v trails by about v*dt however good the solve is. The threshold
@@ -92,9 +123,10 @@ for k = 1:N
     vref(k) = norm(Vk(1:3));
 end
 R.lag_bound = max(vref) * (t(2)-t(1));
-o = R.rmse_ee < 1.5*R.lag_bound;  f = f + ~o;
-fprintf('  %s end effector tracks       steady RMSE %.3e m (delay bound %.3e)\n', ...
-        tag(o), R.rmse_ee, R.lag_bound);
+R.lag_gate = 1.5*R.lag_bound;      % the threshold, bound plus 50 pct margin
+o = R.rmse_ee < R.lag_gate;  f = f + ~o;
+fprintf('  %s end effector tracks       steady RMSE %.3e m (limit %.3e, bound %.3e)\n', ...
+        tag(o), R.rmse_ee, R.lag_gate, R.lag_bound);
 fprintf('       peak arm torque %.2f N m  (no actuator limit on record)\n', R.peak_tau);
 fprintf('       base travels to %.2f m from the origin -- clear that space,\n', R.base_reach);
 fprintf('       it is NOT the 4.2 m x 4.2 m of the 3-DOF orbit \n');
