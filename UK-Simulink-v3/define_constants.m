@@ -2,7 +2,7 @@
 %  EDIT THIS BLOCK. NOTHING ELSE IN THIS FILE NEEDS TOUCHING.
 %  ========================================================================
 
-scenario = 1;          % 1 ellipse | 2 V-bar | 3 R-bar | 4 NMC | 5 circle
+scenario = 3;          % 1 ellipse | 2 V-bar | 3 R-bar | 4 NMC | 5 circle
 
 EnableHardware = 0;    % 0 simulate only. 1 commands the real robot.
 EnableMotive   = 0;    % 0 closes the loop on the model's own state.
@@ -40,7 +40,7 @@ base_override = [NaN; NaN; NaN];        % [x (m); y (m); yaw (deg)]
 speed_factor = 0.25;   % of the designed speed. Wheel peak scales with it:
                        %   0.50 asked 113 rpm with the tool down (22 Sep 2026).
                        %   0.25 keeps the peak under the 60 rpm ceiling below.
-size_factor = 4.0;   % of the designed size
+size_factor  = 0.50;   % of the designed size
 
 % WHEEL CEILING. CommandGuard scales the whole wheel vector down to this,
 % and check_9dof FAILS a run whose solve asks for more, because a scaled
