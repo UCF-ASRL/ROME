@@ -40,6 +40,22 @@ base_override = [NaN; NaN; NaN];        % [x (m); y (m); yaw (deg)]
 speed_factor = 0.50;   % of the designed speed
 size_factor  = 0.50;   % of the designed size
 
+% ARM JOINT CONVENTION. The model's joint angles and the Teensy firmware's are
+% not the same numbers. The firmware accepts J2 in 0..132 deg and J3 in
+% 1..141 deg and REJECTS anything outside (ValidateTraj returns 2, the arm does
+% not move). The model's start pose has J2 near -53 deg, which the firmware
+% would refuse. The offset below is ADDED to the model's angles, in degrees,
+% before they are sent. It has to be measured once:
+%
+%   1. CAL_ARM. The arm goes to the firmware home, [0 90 90 1 0 0] deg.
+%   2. Read actualJointDeg from the ARM, telemetry line.
+%   3. Note the physical posture and compare with what the model's forward
+%      kinematics gives at candidate angles -- see GETTING_STARTED.md.
+%
+% Leave zeros until that is done. With zeros the arm command is what the model
+% computes, which the firmware will reject for J2 and J3.
+arm_offset_deg = [0 0 0 0 0 0];     % added to model angles before sending (deg)
+
 %% ========================================================================
 %  Below here is the formulation. Leave it alone.
 %  ========================================================================
@@ -201,9 +217,9 @@ fprintf('==========================================\n\n');
 %   arm at arm_home, seeded start rate      DIVERGES, step 18 to 32
 %
 % So starting from rest is fine; starting with the arm at its calibrated home
-% is not. At arm_home the end effector sits 0.44 m off the reference, and the
-% base cannot close that while the reference is already running. Adding a
-% fake initial velocity does NOT fix it -- row four above is that experiment.
+% was not, until 22 Sep 2026: the OLD arm_home put the end effector at
+% z = -0.017 m, below the table, 0.44 m from the reference, and every run
+% all five scenarios start from it, at rest, and pass gate_all.
 % Command the arm to the angles below first, as an ordinary joint move, then
 % start tracking.
 fprintf('==========================================\n');
@@ -213,10 +229,10 @@ fprintf('  Base    x %+7.3f m   y %+7.3f m   yaw %+7.2f deg\n', ...
         q0_9dof(1), q0_9dof(2), rad2deg(q0_9dof(3)));
 fprintf('  Arm     %s deg\n', num2str(rad2deg(q0_9dof(4:9)).', '%+8.2f'));
 fprintf('  Rates   all zero. Let it sit still before you start.\n');
-fprintf('\n  Order: place base -> CAL_ARM -> command the arm angles above\n');
-fprintf('         -> confirm it is at rest -> EnableHardware = 1\n');
-fprintf('  The arm angles are a plain joint move. Do NOT skip them: at\n');
-fprintf('  arm_home the end effector is 0.44 m off and the run diverges.\n');
+fprintf('\n  Order: place base -> CAL_ARM -> EnableHardware = 1.\n');
+fprintf('  The model drives the arm to the angles above by itself during\n');
+fprintf('  the 10 s start hold. arm_offset_deg must be set first: with\n');
+fprintf('  zeros the firmware rejects J2 and J3. GETTING_STARTED.md step 3.\n');
 fprintf('==========================================\n\n');
 
 % Safety Check

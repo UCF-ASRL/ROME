@@ -60,6 +60,11 @@ classdef ROMECommand < matlab.System
         %------------------------------------------------------
         if Enable && ~isempty(obj.DeviceHandle)
             jointDeg = rad2deg(jointRad);
+            % Model-to-firmware joint offset, set in define_constants. Zero
+            % until measured; see the note there and GETTING_STARTED.md.
+            if evalin('base', 'exist(''arm_offset_deg'',''var'')')
+                jointDeg = jointDeg(:).' + evalin('base', 'arm_offset_deg(:).''');
+            end
             msg = sprintf(...
                ['ROME,' ...
                 '%.3f,%.3f,%.3f,%.3f,' ...
