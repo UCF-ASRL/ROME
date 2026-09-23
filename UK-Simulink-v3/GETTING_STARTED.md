@@ -34,7 +34,7 @@ speed_factor   = 0.25;             % of the designed speed. Slow on purpose.
 size_factor    = 0.50;             % of the designed size. 2.1 x 2.1 m of floor.
 max_rpm        = 60;               % wheel ceiling (firmware's own cap is 120)
 arm_sign       = [ 1 -1 -1  1  1  1];   % model -> firmware joint map, SEE STEP 3
-arm_offset_deg = [ 0 180 90  0  0  0];  %   firmware = arm_sign .* model + arm_offset_deg
+arm_offset_deg = [-90 180 90  0  0  0]; %   firmware = arm_sign .* model + arm_offset_deg
 arm_fw_switch / arm_fw_other       % limits[] / otherLimits[], copied from ROME_Teensy_Code.ino
 arm_fw_margin_deg = 2.0;           % the cap stays this far inside both ends
 ```
@@ -85,8 +85,11 @@ Teensy code:
 | J3 range | −51 … 89 | 1 … 141 |
 | J5 | ±90 | ±90 |
 
-So `firmware J2 = 180 − model J2`, `firmware J3 = 90 − model J3`; J1, J4,
-J5, J6 are symmetric ranges and only their sign is in question. Those are the
+So `firmware J2 = 180 − model J2`, `firmware J3 = 90 − model J3`. J1: the
+arm is mounted with its swing plane along the base's **+y**, which is model
+J1 = +90 while the firmware reads ≈ 0 there, so `firmware J1 = model J1 −
+90` (−90 becomes +90 if the J1 jog runs opposite to the model). J4, J5, J6
+are symmetric ranges and only their sign is in question. Those are the
 defaults in the block. They are **derived, not measured**. The jog test:
 
 1. `calibrateROMEArm`. It sends `HOME` with the scenario's start posture
@@ -99,15 +102,25 @@ defaults in the block. They are **derived, not measured**. The jog test:
    ```matlab
    jog_joint(2, 10)      % J2, +10 deg: prints reading before/after, feeds the watchdog
    ```
-   Two firmware faults look alike from MATLAB; the jog tells them apart.
-   *Arm goes the commanded way, reading runs the other way*: that joint's
-   encoder counts against its steps — swap its `Encoder(a, b)` pins (or
-   negate its read) in the sketch. `negspeeds[]` does not touch this: it
-   only sets the sign for `runSpeed()` in the calibration drive; the
-   closed-loop moves use `moveTo`/`run`, whose direction is target minus
-   position. *Arm goes the wrong way*: step direction. (22 Sep 2026 first
-   try: J1, J2, J5 were commanded lower and their readings went UP — the
-   encoder case; J3 and J6 behaved.)
+   What the 22 Sep 2026 logs established: calibration moves (switch to
+   home, up to 178 deg) converge on every joint's encoder, so the encoders
+   count in the right sense. Commanded moves went the wrong way on J1, J2,
+   J5. The difference is in `encoderRunToVal_nb`: it calls `setSpeed(+-
+   runSpeed)` every iteration with a sign taken from `path`, and AccelStepper
+   steps in that direction whenever `moveTo` sees an unchanged target.
+   Calibration passes `path = 3` (sign `+negspeeds`, right for switch->home);
+   a command goes through `ValidateTraj`'s cw/ccw search, `path` 0 or 1,
+   whose sign is wrong on those joints, so each step goes the wrong way and
+   the reading (correct) drifts off. Fix in the sketch (applied, needs
+   flashing): the step sign that increases a joint's angle is
+   `negspeeds[x] * sgn(otherLimits[x] - limits[x])` (on J1, J2, J3, J5
+   positive steps DEcrease the angle; on J4, J6 they increase it), so
+   `setSpeed(runSpeed * negspeeds[x] * toward * sgn(error))` replaces the
+   `path` branches; for calibration it reduces to the old `+negspeeds`.
+   `negspeeds[]` tuned by trial and error is why calibration works while
+   commands did not.
+   With the jog: *reading runs away from the command* = this bug;
+   *reading follows, arm goes the other way* = encoder sense (not seen so far).
 3. What the model says the same jog does, from the start posture:
    ```matlab
    q = arm_home; j = 2;  dq = zeros(6,1); dq(j) = deg2rad(10) * arm_sign(j);

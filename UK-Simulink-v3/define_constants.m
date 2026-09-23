@@ -64,8 +64,12 @@ max_rpm = 60;          % rev/min
 % arm. GETTING_STARTED.md step 3 is the jog test that confirms each joint;
 % do it before EnableHardware = 1. J1, J4, J5, J6 are symmetric ranges, so
 % only their sign is in question.
+% J1: the arm is mounted so its swing plane is the base's +y (22 Sep 2026,
+% after turning the arm 180 deg on the plate). The model's J1 = 0 swings
+% along +x, so physical "forward" is model J1 = +90 while the firmware reads
+% about 0 there: offset = -90 * arm_sign(1). Sign from jog_joint(1, 30).
 arm_sign       = [ 1  -1  -1   1   1   1];   % +1 same direction as the model
-arm_offset_deg = [ 0 180  90   0   0   0];   % added after the sign, degrees
+arm_offset_deg = [-90 180  90   0   0   0];  % added after the sign, degrees
 
 % FIRMWARE RANGES, limits[] / otherLimits[] in ROME_Teensy_Code.ino. The
 % command is capped to these in ROMECommand (arm_clamp) after the map above,

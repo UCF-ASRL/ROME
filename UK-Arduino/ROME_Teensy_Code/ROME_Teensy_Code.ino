@@ -387,17 +387,20 @@ void encoderRunToVal_nb(int x, float targetSteps, int path) {
   }
 
   steppers[x].setAcceleration(maxAccel);
-  if (x != 2) {
-    if (path == 3)       steppers[x].setSpeed(runSpeed * negspeeds[x]);
-    else if (path == 0)  steppers[x].setSpeed(-runSpeed * negspeeds[x]);
-    else if (path == 1)  steppers[x].setSpeed(runSpeed * negspeeds[x]);
-    else return;
-  } else {
-    if (path == 3)       steppers[x].setSpeed(runSpeed * negspeeds[x]);
-    else if (path == 0)  steppers[x].setSpeed(runSpeed * negspeeds[x]);
-    else if (path == 1)  steppers[x].setSpeed(-runSpeed * negspeeds[x]);
-    else return;
-  }
+  // Direction toward the target, not from 'path'. AccelStepper steps in the
+  // setSpeed() direction whenever moveTo() sees an unchanged target, so the
+  // path-based signs (right for calibration, path 3) sent J1, J2, J5 the
+  // wrong way on commanded moves (22 Sep 2026). Which step sign INCREASES the
+  // angle differs per joint: negspeeds[x] is the step sign that goes from the
+  // switch toward otherLimits[x], so negspeeds[x] * sgn(otherLimits - limits)
+  // increases the angle; times the sign of the error gives the direction to
+  // the target. For path 3 (calibration) this equals the old +negspeeds.
+  // 'path' still gates the call: ValidateTraj returns 2 for out-of-range or
+  // already-there.
+  if (path != 0 && path != 1 && path != 3) return;
+  int toward = (otherLimits[x] > limits[x]) ? 1 : -1;   // sign of angle increase, in steps of negspeeds
+  int dir    = (error > 0) ? 1 : -1;                     // do we need the angle to increase
+  steppers[x].setSpeed(runSpeed * negspeeds[x] * toward * dir);
 
   steppers[x].moveTo(actual + error);
   steppers[x].run();
