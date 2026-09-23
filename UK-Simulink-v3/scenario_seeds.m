@@ -40,7 +40,11 @@ s_min = 0.30;                       % screening threshold on s. Bracketed by
                                     %   measurement: 0.16 at the worst
                                     %   diverging start, 0.67 at the stable
                                     %   ones (metric_check, sweep_formulation)
-guess = [0.10, 2*atan2(u0(4), u0(1)), -pi/2, pi/2, 0.0, pi];
+psi0  = atan2(2*(u0(2)*u0(3) + u0(1)*u0(4)), 1 - 2*(u0(3)^2 + u0(4)^2));
+                                    % yaw of the reference attitude, from
+                                    %   R(2,1)/R(1,1) of the quaternion, so
+                                    %   it holds for any tool direction
+guess = [0.10, psi0, -pi/2, pi/2, 0.0, pi];
 q0 = [];
 for gk = 1:numel(guess)
     qc = ik9_warm_start([0; 0; guess(gk); arm_home(:)], p0, u0);

@@ -10,15 +10,26 @@ PORT     = 3333;
  
 TIMEOUT_SECONDS = 120;
  
-homePosDeg = [
-     0.0
-    90.0 
-    90.0
-     1.0
-     0.0
-     0.0
-];
- 
+% The arm is parked where the model starts, in FIRMWARE degrees, from the
+% same define_constants the model runs on: q0_9dof(4:9) is the start
+% posture the card prints, arm_sign / arm_offset_deg the model-to-firmware
+% map, arm_fw_* the ranges the command is capped to. Nothing is typed here.
+here = fileparts(mfilename('fullpath'));
+addpath(here, fullfile(here, 'Optitrack'));
+evalc('define_constants');
+homePosDeg = arm_sign(:) .* rad2deg(q0_9dof(4:9)) + arm_offset_deg(:);
+[homePosDeg, hit] = arm_clamp(homePosDeg, arm_fw_lo, arm_fw_hi, arm_fw_margin_deg);
+homePosDeg = homePosDeg(:);
+if any(hit)
+    error(['the start posture maps outside the firmware range on joint(s) %s: ' ...
+           'fw %s. Fix arm_home / arm_sign / arm_offset_deg in define_constants ' ...
+           'and re-run gate_all before calibrating.'], mat2str(find(hit)), ...
+           mat2str(round(homePosDeg.', 1)));
+end
+fprintf('\nScenario %d start posture, firmware degrees: %s\n', scenario, ...
+        mat2str(round(homePosDeg.', 1)));
+fprintf('Model degrees: %s\n', mat2str(round(rad2deg(q0_9dof(4:9)).', 1)));
+
 fprintf('\n===========================================\n');
 fprintf('ROME ARM CALIBRATION\n');
 fprintf('===========================================\n');
@@ -66,16 +77,28 @@ end
  
 fprintf('Calibration routine finished on hardware.\n');
  
-%% Send HOME Position
+%% Send HOME Position, then park the arm there
+% CAL_ARM drove the joints to the firmware's own home. HOME only records the
+% start posture for the NEXT calibration (the firmware does not move on it),
+% so the arm is then parked with a normal angle command: ROME with zero wheel
+% speed and the six angles. The ESP32 splits that into the GV and ARM lines
+% and the Teensy validates the angles (ValidateTraj) before moving.
 homeCmd = sprintf('HOME,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n', homePosDeg);
- 
+parkCmd = sprintf('ROME,0,0,0,0,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n', homePosDeg);
+
 fprintf('Sending HOME target configuration...\n');
 fprintf('[TX] %s', homeCmd);
- 
-% Flush buffer before sending HOME command to ensure crisp tracking
 flush(c);
 write(c, homeCmd, "char");
 pause(0.5);
+
+fprintf('Parking the arm at the start posture...\n');
+fprintf('[TX] %s', parkCmd);
+write(c, parkCmd, "char");
+pause(0.5);
+fprintf(['Check the arm: elbow up and forward, forearm pointing down, tool\n' ...
+         'at the floor in front of the base. If it did not move, the firmware\n' ...
+         'rejected an angle: see GETTING_STARTED.md step 3.\n']);
  
 %% Query Status
 fprintf('Verifying arm system state...\n');

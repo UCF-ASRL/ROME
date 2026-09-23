@@ -2,10 +2,12 @@
 
 Everything you change is the block at the top of `define_constants.m`. Below
 the line marked *"Below here is the formulation"* is the solve; leave it.
+Every other file that talks to the robot reads that block: `ROMECommand`
+(joint map and cap), `CommandGuard` (wheel ceiling, start hold),
+`calibrateROMEArm` (parking pose), `check_9dof` / `gate_all` (the gate).
+Change a number there, re-run `gate_all`, and all of them follow.
 
-Verified 22 September 2026: all five scenarios pass `gate_all` from the
-calibration home, at rest, in the Simulink model. Peaks 1.4 to 33.2 rpm,
-tracking within limits.
+VERIFIED_LINE
 
 ---
 
@@ -16,110 +18,108 @@ scenario       = 1;                % 1 ellipse | 2 V-bar | 3 R-bar | 4 NMC | 5 c
 EnableHardware = 0;                % 1 commands the real robot
 EnableMotive   = 0;                % 1 closes the loop on the cameras
 base_override  = [NaN; NaN; NaN];  % [x m; y m; yaw deg], only with cameras off
-speed_factor   = 0.50;             % of the designed speed. Slow on purpose.
+speed_factor   = 0.25;             % of the designed speed. Slow on purpose.
 size_factor    = 0.50;             % of the designed size. 2.1 x 2.1 m of floor.
-arm_sign       = [1 1 1 1 1 1];    % model -> firmware joint map. SEE STEP 3.
-arm_offset_deg = [0 0 0 0 0 0];    %   firmware = arm_sign .* model + arm_offset_deg
+max_rpm        = 60;               % wheel ceiling (firmware's own cap is 120)
+arm_sign       = [ 1 -1 -1  1  1  1];   % model -> firmware joint map, SEE STEP 3
+arm_offset_deg = [ 0 180 90  0  0  0];  %   firmware = arm_sign .* model + arm_offset_deg
+arm_fw_lo / arm_fw_hi              % firmware ranges, from ROME_Teensy_Code.ino
+arm_fw_margin_deg = 2.0;           % the cap stays this far inside both ends
 ```
 
-Save, reopen the model. `define_constants` runs on every load.
+Save, reopen the model. `define_constants` runs on every load and prints the
+card: where to put the base, what the arm angles are, in model degrees.
 
-`speed_factor` and `size_factor` apply to every scenario. Halving size costs
-nothing in timing; it only shrinks the orbit. Turn either up one step at a
-time and re-run `gate_all`.
+`speed_factor` and `size_factor` apply to every scenario. The wheel peak
+scales with `speed_factor`; at 0.50 the solve asked for 113 rpm, at 0.25 it
+stays under the 60 rpm ceiling. Raise either one step at a time, `gate_all`
+after each.
 
-## 2. What the model does at the start
+## 2. What the model does
 
-- **10 s hold.** The reference is frozen at its starting point for the first
-  10 s, so the arm settles onto it while the base sits still.
-- **2 s wheel ramp.** After the hold the wheel command rises linearly to full
-  over 2 s instead of stepping.
-- **Starts from rest.** No initial velocity is assumed anywhere.
+- **Tool points at the floor.** The end effector works at `z_work = 0.32 m`
+  with the tool z-axis down, yaw following the pointing law. With the tool
+  up, every start the AR3 can physically take was badly conditioned
+  (s <= 0.38, all five laps diverged); pointing it down is the same arm
+  turned 180 deg about the shoulder, which keeps the conditioning that was
+  tested (s = 0.68) and puts the elbow above the shoulder.
+- **Start posture `arm_home`** = model `[-3 127 -10 0 -27 0]` deg: elbow up
+  and forward, forearm down, tool at the floor about 0.34 m in front of
+  the base axis. Firmware `[-3 53 100 0 -27 0]`.
+- **10 s hold.** The reference is frozen for the first 10 s.
+- **2 s wheel ramp**, then `CommandGuard` scales the whole wheel vector to
+  `max_rpm` if the solve ever asks for more (it should not: the gate fails
+  a run that does).
+- **Joint cap.** After the map to firmware degrees, `arm_clamp` pulls every
+  joint inside `[lo + margin, hi - margin]`. The gate also fails a run whose
+  commands come within the margin of a limit, so on a gated run the cap
+  never acts.
+- **Starts from rest.** No initial velocity anywhere.
+- **Camera loop.** With `EnableMotive = 1`, `StateSource` feeds the solve
+  the Motive base pose and the arm's reported joints (converted back to
+  model degrees inside `ROMECommand`) instead of its own delayed command.
 
-The arm's calibration home now sits at working height (`z = 0.419 m`). The
-old one put the end effector 1.7 cm *below the table*, which is why any run
-from home diverged.
+## 3. The joint convention — confirm it once, before anything moves
 
-## 3. The joint convention — read this before anything moves
+Model angles and firmware angles are different numbers. From the AR3's own
+files (`Literature Review/Annin_AR3_software`, `ARbot.cal`) and the ROME
+Teensy code:
 
-The model's joint angles and the Teensy's are **not the same numbers**, and
-J2 does not even run the same way. Model angles, from the DH table in
-`ik9_fk.m` / `ukd_current.m`:
+| | model | AR3 / ROME firmware |
+|---|---|---|
+| J2 = 0 | upper arm hanging straight down | vertical up |
+| J2 range | 48 … 180 (reachable) | 0 … 132, switch at the forward end |
+| J3 = 0 | forearm bent 90 deg forward | forearm aligned with upper arm |
+| J3 range | −51 … 89 | 1 … 141 |
+| J5 | ±90 | ±90 |
 
-| model angles (deg) | what the arm looks like |
-|---|---|
-| J2 = 0 | upper arm hanging **straight down** |
-| J2 = 90 | upper arm horizontal, forward (base +x) |
-| J2 = 180 | upper arm straight up |
-| J2 = 180, J3 = 0 | upper arm up, forearm horizontal forward (the L) |
-| J2 = 90, J3 = 90 | whole arm stretched out horizontally |
-| `arm_home` (J2 = −53) | elbow **below the shoulder, behind the column** |
+So `firmware J2 = 180 − model J2`, `firmware J3 = 90 − model J3`; J1, J4,
+J5, J6 are symmetric ranges and only their sign is in question. Those are the
+defaults in the block. They are **derived, not measured**. The jog test:
 
-The AR3's shoulder leans −42° … +90° from vertical-up. In model numbers that
-is roughly J2 = 222 … 90. **Model J2 = 0 and `arm_home` are postures the real
-arm cannot take**, whatever the numbers are relabeled to. Sending them will
-either be rejected (`ValidateTraj` returns 2, arm stays put, the run diverges
-because the model thinks it moved) or, through `HOME,` during calibration,
-driven into an end stop — that path has no validation.
-
-Firmware ranges (`ROME_Teensy_Code.ino`, after `CAL_ARM` the switch side reads
-`limits[]`): J1 −180…160, **J2 0…132**, **J3 1…141**, J4 −165…165,
-J5 −90…90, J6 −170…180. Firmware home `[0 90 90 1 0 0]`.
-
-What has to happen, in order:
-
-1. **`arm_home` has to move into the reachable window** (model J2 in
-   90…222, elbow above the shoulder) and `gate_all` re-run. One number,
-   one re-test. Not done yet — it changes the start posture every case
-   study was gated from.
-2. **Measure the map, one joint at a time.** `CAL_ARM`, then send a +10°
-   jog on one joint with zero wheel speed:
+1. `CAL_ARM` (via `calibrateROMEArm`, which now also parks the arm at the
+   scenario's start posture and prints both sets of angles).
+2. Jog one joint +10 deg in firmware with zero wheel speed:
    ```matlab
    c = tcpclient("192.168.4.1", 3333);
-   fw = [0 90 90 1 0 0];  fw(2) = fw(2) + 10;          % jog J2 by +10
+   fw = [-3 53 100 0 -27 0];  fw(2) = fw(2) + 10;         % J2, +10
    write(c, uint8(char(sprintf('ROME,0,0,0,0,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\n', fw))));
    ```
-   In MATLAB, from the model posture that matches what you saw after
-   `CAL_ARM` (use the table above; for the L it is `[0 180 0 0 0 0]`):
+3. What the model says the same jog does, from the start posture:
    ```matlab
-   q = deg2rad([0 180 0 0 0 0]); j = 2;  dq = zeros(6,1); dq(j) = deg2rad(10);
+   q = arm_home; j = 2;  dq = zeros(6,1); dq(j) = deg2rad(10) * arm_sign(j);
    ik9_fk([0;0;0;q(:)+dq]) - ik9_fk([0;0;0;q(:)])     % EE displacement, base frame
    ```
-   Same direction → `arm_sign(j) = +1`, opposite → `−1`. Then
-   `arm_offset_deg(j) = firmware_home(j) − arm_sign(j) * model_home(j)`.
-3. Put the mapped start angles into `calibrateROMEArm.m` (`homePosDeg`, sent
-   as `HOME,`) so calibration parks the arm where the model starts. They must
-   be **firmware** numbers, inside the ranges above.
-
-Until 1 and 2 are done, leave the defaults and keep `EnableHardware = 0`.
+   Same direction → the sign is right. Opposite → flip `arm_sign(j)`, and
+   set `arm_offset_deg(j)` so the parked posture reads the firmware angle
+   the arm actually reports (`ARM,` telemetry line).
+4. `gate_all`, then `EnableHardware = 1`.
 
 Known geometry gap, not fixed: the model's DH table has no shoulder offset
-(`a1 = 0`); the AR3 has 64.2 mm. Every model end-effector position is off by
-that much along the upper-arm direction.
+(`a1 = 0`); the AR3 has 64.2 mm.
 
 ## 4. Simulation first
 
 ```matlab
-check_9dof      % selected scenario, errors on failure
+check_9dof      % selected scenario: residual, wheel peak < max_rpm, s, tracking, joint window
 gate_all        % all five
+check_guard     % the guard and the joint cap
 ```
 
 ## 5. On the robot
 
-1. Place the base in the camera area. With `EnableMotive = 1` the cameras
-   report where it is. Cameras off: put it where the printout says, or type the
-   measured pose into `base_override`.
-2. `CAL_ARM`.
-3. `EnableHardware = 1` and run. The model commands the arm to the start pose
-   during the 10 s hold. Only after step 3 above is complete — a reachable
-   `arm_home` and a measured `arm_sign` / `arm_offset_deg`.
-4. Watch the first 12 s. Arm moves, base does not; then the base starts slowly.
+1. Place the base in the camera area. `EnableMotive = 1`: the cameras report
+   where it is. Cameras off: put it where the card says, or type the measured
+   pose into `base_override`.
+2. `calibrateROMEArm`. Calibrates, then parks the arm at the start posture
+   and tells you what it should look like. If the arm does not move to it,
+   the firmware rejected an angle: step 3.
+3. `EnableHardware = 1`, run. First 10 s nothing moves (hold), then the base
+   starts slowly. Slow lap.
 
 ## If it misbehaves
 
-**Arm does not move on start.** The firmware rejected the angle: the
-model→firmware map is wrong or unmeasured, or the commanded posture is
-outside the firmware ranges. Nothing is damaged; go back to step 3.
+**Arm does not move.** Firmware rejected the angle: map or range. Step 3.
 
 **Base does not start.** Mega waits for `'Y'`; the ESP32 translates
 `START_GV` into it. Check the ESP32 is on the WiFi sketch and connected.
@@ -132,9 +132,12 @@ wiring.
 so the last command stays applied. **Cut power.** Known gap.
 
 **Camera mode misbehaves.** `EnableMotive = 1` has never been run. Fall back
-to `EnableMotive = 0` with `base_override` set; that path is verified.
+to `EnableMotive = 0` with `base_override` set; that path is gated.
 
 ## Do not change without re-running `gate_all`
 
-`arm_home`, anything below the line in `define_constants.m`, `T_HOLD` in
-`EndEffectorTrajectory.m`, `RAMP_STEPS` in `CommandGuard.m`.
+`arm_home`, `z_work`, anything below the line in `define_constants.m`,
+`T_HOLD` in `EndEffectorTrajectory.m`, `RAMP_STEPS` in `CommandGuard.m`.
+After editing any MATLAB Function block source (`EndEffectorTrajectory.m`,
+`ukd_current.m`, `CommandGuard.m`) run `refresh_block_code('ROME_9DOF.slx', true)`
+so the model carries the same code.

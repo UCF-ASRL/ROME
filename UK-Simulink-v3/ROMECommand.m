@@ -18,7 +18,11 @@ classdef ROMECommand < matlab.System
         %==============================================================
         function setupImpl(obj)
             obj.actualWheelRPM_ = zeros(4,1);
-            obj.actualJointDeg_ = zeros(6,1);
+            if evalin('base', 'exist(''arm_home'',''var'')')
+                obj.actualJointDeg_ = rad2deg(evalin('base','arm_home(:)'));
+            else
+                obj.actualJointDeg_ = zeros(6,1);
+            end
             obj.armReady_ = false;
             obj.lastTelemetryTime_ = tic;
         end
@@ -129,7 +133,7 @@ classdef ROMECommand < matlab.System
                     elseif startsWith(line,"ARM,")
                         parts = split(line,",");
                         if numel(parts) >= 8
-                            obj.actualJointDeg_ = ...
+                            fwDeg = ...
                                 [ ...
                                 str2double(parts(2))
                                 str2double(parts(3))
@@ -137,6 +141,15 @@ classdef ROMECommand < matlab.System
                                 str2double(parts(5))
                                 str2double(parts(6))
                                 str2double(parts(7)) ];
+                            % Undo the model-to-firmware map, so what goes
+                            % back into the solve (ArmDeg2Rad -> StateSource
+                            % when UseMotive = 1) is in MODEL degrees, the
+                            % convention it commands in.
+                            if evalin('base', 'exist(''arm_offset_deg'',''var'')')
+                                fwDeg = (fwDeg(:) - evalin('base','arm_offset_deg(:)')) ...
+                                        ./ evalin('base','arm_sign(:)');
+                            end
+                            obj.actualJointDeg_ = fwDeg(:);
                             stateStr = ...
                                 strtrim(parts(8));
                             obj.armReady_ = ...

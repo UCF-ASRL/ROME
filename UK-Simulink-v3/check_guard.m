@@ -114,7 +114,7 @@ fprintf('  [OK] joint cap: margin %g deg inside both ends   arm_home -> fw %s\n'
 %% 6. in the model: a reference that needs more than the ceiling
 orig = claim_constants();                  % see the function, foot of file
 restore = onCleanup(@() release_constants(orig));
-wf('define_constants.m', regexprep(orig, 'dist_scale = 1\.0;', 'dist_scale = 2.0;', 'once'));
+wf('define_constants.m', regexprep(orig, 'size_factor\s*=\s*[0-9.]+;', 'size_factor = 4.0;', 'once'));
 if bdIsLoaded('ROME_9DOF'), close_system('ROME_9DOF', 0); end
 evalin('base', 'clear guard_flag');
 load_system(fullfile(here, 'ROME_9DOF.slx'));
@@ -123,9 +123,10 @@ out = sim('ROME_9DOF', 'SimulationMode', 'normal', 'ReturnWorkspaceOutputs', 'on
 close_system('ROME_9DOF', 0);
 gf = squeeze(out.guard_flag.Data);
 w  = squeeze(out.wheel_speeds_rpm.Data);
-assert(max(abs(w(:))) > 120, 'this case was meant to exceed the ceiling, peak was %.1f', max(abs(w(:))));
+mr = evalin('base','max_rpm');
+assert(max(abs(w(:))) > mr, 'this case was meant to exceed the ceiling %g, peak was %.1f', mr, max(abs(w(:))));
 assert(any(gf == 1), 'guard never reported saturation while the solve asked for %.1f rpm', max(abs(w(:))));
-fprintf('  [OK] model run at dist_scale = 2             solve asked %.1f rpm, guard saturated on %d of %d steps\n', ...
+fprintf('  [OK] model run at size_factor = 4            solve asked %.1f rpm, guard saturated on %d of %d steps\n', ...
         max(abs(w(:))), sum(gf == 1), numel(gf));
 
 fprintf('\n  CommandGuard: all checks passed.\n');

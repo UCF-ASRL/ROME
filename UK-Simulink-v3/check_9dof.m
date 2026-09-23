@@ -7,7 +7,7 @@ function R = check_9dof()
 %
 %   Thresholds and where each comes from:
 %     constraint residual < 1e-10   test_uk_block measured 1.12e-12 at 20 Hz
-%     peak wheel  < 120 rpm         MAX_RPM, MatlabPIDLoop.ino. NOTHING
+%     peak wheel  < max_rpm         define_constants (60); firmware 120. NOTHING
 %                                   saturates between the block and the
 %                                   motors (defect E4), so the ceiling is hard
 %     min s       > 0.30            s = sigma_min(A M^-1/2) is the smallest
@@ -91,7 +91,8 @@ fprintf('\n  ran %.2f s, %d steps at dt = %.3f s (%.0f Hz)\n', ...
 
 f = 0;
 o = R.max_res   < 1e-10; f=f+~o; fprintf('  %s constraint satisfied      max residual %.2e\n', tag(o), R.max_res);
-o = R.peak_rpm  < 120;   f=f+~o; fprintf('  %s wheel speed under ceiling peak %.1f rpm (max 120)\n', tag(o), R.peak_rpm);
+mr = evalin('base','max_rpm');
+o = R.peak_rpm  < mr;    f=f+~o; fprintf('  %s wheel speed under ceiling peak %.1f rpm (max_rpm %g, firmware 120)\n', tag(o), R.peak_rpm, mr);
 % Conditioning of the matrix the solve inverts, along the whole run:
 %
 %     s = sigma_min(Jc M^-1/2),    ||qddot - a|| <= ||M^-1/2|| ||b - A a|| / s
