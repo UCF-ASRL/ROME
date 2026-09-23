@@ -65,6 +65,12 @@ write(c, homeCmd, "char");
 pause(0.2);
 
 %% 2. Request Calibration
+% Every ARM, line from here to the end is logged with a timestamp, so the
+% path each joint's reading took (switch value -> home -> park) can be read
+% back afterwards. calib_log_<time>.csv next to this file; summary at the end.
+armLog = zeros(0, 7);                       % [t, J1..J6]
+logT0  = tic;
+logfile = fullfile(here, sprintf('calib_log_%s.csv', datestr(now, 'yyyymmdd_HHMMSS')));
 fprintf('Sending CAL_ARM...\n');
 write(c, "CAL_ARM" + newline, "char");
 
@@ -75,6 +81,10 @@ while toc < TIMEOUT_SECONDS
     if c.NumBytesAvailable > 0
         % Read available stream data
         rawMsg = strtrim(readline(c));
+        if startsWith(rawMsg, "ARM,")
+            parts = split(rawMsg, ",");
+            if numel(parts) >= 8, armLog(end+1, :) = [toc(logT0), str2double(parts(2:7)).']; end %#ok<AGROW>
+        end
         % Check for hardware handshake complete string
         if contains(rawMsg, "ARM_READY")
             armReady = true;
@@ -83,6 +93,11 @@ while toc < TIMEOUT_SECONDS
         end
     end
     pause(0.02);
+end
+if isempty(armLog)
+    fprintf('  (no ARM telemetry during calibration: the Teensy is silent while it calibrates)\n');
+else
+    fprintf('  %d ARM lines during calibration; last: %s\n', size(armLog,1), mat2str(round(armLog(end,2:7),1)));
 end
 
 if ~armReady
@@ -119,6 +134,7 @@ while toc(settleTimer) < 25
             parts = split(msg, ",");
             if numel(parts) >= 8
                 vals = str2double(parts(2:7)).';
+                armLog(end+1, :) = [toc(logT0), vals]; %#ok<AGROW>
                 statusReceived = statusReceived || contains(parts(8), "READY");
                 if any(abs(vals - lastRead) > 0.3) || any(isnan(lastRead))
                     lastChange = tic;
@@ -131,6 +147,20 @@ while toc(settleTimer) < 25
     pause(0.02);
 end
 
+if ~isempty(armLog)
+    fid = fopen(logfile, 'w');
+    fprintf(fid, 't_s,J1,J2,J3,J4,J5,J6\n');
+    fprintf(fid, '%.3f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\n', armLog.');
+    fclose(fid);
+    fprintf('\n  telemetry log: %s  (%d lines, %.1f s)\n', logfile, size(armLog,1), armLog(end,1)-armLog(1,1));
+    fprintf('  joint   first     min     max    last   target\n');
+    for i = 1:6
+        col = armLog(:, i+1);
+        fprintf('  J%d    %6.1f  %6.1f  %6.1f  %6.1f   %6.1f\n', i, col(1), min(col), max(col), col(end), homePosDeg(i));
+    end
+    fprintf(['  A joint whose min..max never left its switch value did not count while\n' ...
+             '  it moved (encoder). One that swept far past the target ran away.\n']);
+end
 if any(isnan(lastRead))
     warning('no ARM telemetry received while parking; cannot judge the posture');
 else
