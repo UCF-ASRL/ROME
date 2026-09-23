@@ -40,21 +40,23 @@ base_override = [NaN; NaN; NaN];        % [x (m); y (m); yaw (deg)]
 speed_factor = 0.50;   % of the designed speed
 size_factor  = 0.50;   % of the designed size
 
-% ARM JOINT CONVENTION. The model's joint angles and the Teensy firmware's are
-% not the same numbers. The firmware accepts J2 in 0..132 deg and J3 in
-% 1..141 deg and REJECTS anything outside (ValidateTraj returns 2, the arm does
-% not move). The model's start pose has J2 near -53 deg, which the firmware
-% would refuse. The offset below is ADDED to the model's angles, in degrees,
-% before they are sent. It has to be measured once:
+% ARM JOINT CONVENTION. The model's joint angles and the Teensy firmware's
+% are NOT the same numbers, and for J2 they do not even run the same way.
+% Model J2 = 0 is the upper arm hanging straight DOWN; model J2 = 90 is
+% horizontal forward. The AR3 measures J2 from vertical UP and can only
+% lean -42..+90 deg, so model J2 = 0 is a posture the real arm cannot take,
+% and arm_home (J2 = -53) is further out still. The firmware then rebases
+% each joint so its limit switch reads limits[] (J2: 0..132, J3: 1..141) and
+% REJECTS anything outside (ValidateTraj returns 2, the arm does not move).
 %
-%   1. CAL_ARM. The arm goes to the firmware home, [0 90 90 1 0 0] deg.
-%   2. Read actualJointDeg from the ARM, telemetry line.
-%   3. Note the physical posture and compare with what the model's forward
-%      kinematics gives at candidate angles -- see GETTING_STARTED.md.
+% What goes over the wire is   firmware_deg = arm_sign .* model_deg + arm_offset_deg
 %
-% Leave zeros until that is done. With zeros the arm command is what the model
-% computes, which the firmware will reject for J2 and J3.
-arm_offset_deg = [0 0 0 0 0 0];     % added to model angles before sending (deg)
+% Both vectors have to be measured on the arm, once. GETTING_STARTED.md
+% step 3 is the procedure: CAL_ARM, jog one joint at a time, compare with
+% what the model says the same jog does. Until that is done leave the
+% defaults and keep EnableHardware = 0: with them the firmware rejects J2.
+arm_sign       = [1 1 1 1 1 1];     % +1 same direction as the model, -1 opposite
+arm_offset_deg = [0 0 0 0 0 0];     % added after the sign, degrees
 
 %% ========================================================================
 %  Below here is the formulation. Leave it alone.
@@ -231,8 +233,9 @@ fprintf('  Arm     %s deg\n', num2str(rad2deg(q0_9dof(4:9)).', '%+8.2f'));
 fprintf('  Rates   all zero. Let it sit still before you start.\n');
 fprintf('\n  Order: place base -> CAL_ARM -> EnableHardware = 1.\n');
 fprintf('  The model drives the arm to the angles above by itself during\n');
-fprintf('  the 10 s start hold. arm_offset_deg must be set first: with\n');
-fprintf('  zeros the firmware rejects J2 and J3. GETTING_STARTED.md step 3.\n');
+fprintf('  the 10 s start hold. arm_sign / arm_offset_deg must be measured\n');
+fprintf('  first (GETTING_STARTED.md step 3); with the defaults the firmware\n');
+fprintf('  rejects J2. Model J2 = 0 is the arm hanging straight down.\n');
 fprintf('==========================================\n\n');
 
 % Safety Check
