@@ -69,7 +69,12 @@ max_rpm = 60;          % rev/min
 % along +x, so physical "forward" is model J1 = +90 while the firmware reads
 % about 0 there: offset = -90 * arm_sign(1). Sign from jog_joint(1, 30).
 arm_sign       = [ 1  -1  -1   1   1   1];   % +1 same direction as the model
-arm_offset_deg = [-90 180  90   0   0   0];  % added after the sign, degrees
+arm_offset_deg = [ 0 180  90   0   0   0];   % added after the sign, degrees
+% J1 offset back to 0 (23 Sep 2026): with -90 the calibration stalled on J3/J4,
+% which then fold and roll through a different quadrant of the base. 0 is the
+% set that calibrated cleanly at 22:40. On the flipped mount the arm then faces
+% +y, not the model's +x: fine while arm_freeze = 1, to be fixed by the jog
+% test (arm_sign(1), then offset -90 or +90) before tracking is attempted.
 
 % FIRMWARE RANGES, limits[] / otherLimits[] in ROME_Teensy_Code.ino. The
 % command is capped to these in ROMECommand (arm_clamp) after the map above,
