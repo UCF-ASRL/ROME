@@ -15,7 +15,7 @@ const uint32_t WATCHDOG_TIMEOUT_MS = 500;
 
 // Speeds and Accelerations
 int maxSpeed = 2000;
-int calspeed[6] = {1200, 800, 800, 800, 800, 800};
+int calspeed[6] = {1200, 800, 800, 600, 800, 800};
 int maxAccel = 500;
 int runSpeed = 750;
 
