@@ -44,7 +44,14 @@ psi0  = atan2(2*(u0(2)*u0(3) + u0(1)*u0(4)), 1 - 2*(u0(3)^2 + u0(4)^2));
                                     % yaw of the reference attitude, from
                                     %   R(2,1)/R(1,1) of the quaternion, so
                                     %   it holds for any tool direction
-guess = [0.10, psi0, -pi/2, pi/2, 0.0, pi];
+guess = [psi0, 0.10, -pi/2, pi/2, 0.0, pi];
+                                    % psi0 first: base facing the chief,
+                                    %   arm at arm_home. With the tool
+                                    %   down the 0.10 guess lands on a
+                                    %   branch with J1 = 52, J6 = -68 deg,
+                                    %   55 and 68 deg off arm_home; the
+                                    %   posture spring then unwinds through
+                                    %   the hold at 89 rpm and 59 mm error.
 q0 = [];
 for gk = 1:numel(guess)
     qc = ik9_warm_start([0; 0; guess(gk); arm_home(:)], p0, u0);

@@ -66,12 +66,18 @@ pos = zeros(2,1);   vel = zeros(2,1);   acc = zeros(2,1);
 
 % HOLD AT THE START. The reference does not begin until t_hold has passed,
 % so the arm has time to drive itself to the start pose while the base sits
-% still. Before that the reference is frozen at its t = 0 value, which means
-% the end effector is being asked to go somewhere fixed rather than chase a
-% moving target. Without it the run has to begin with the arm already placed
+% still. Before that the reference is frozen at its t = 0 value, position AND
+% rates, so the end effector is asked to sit still at a fixed point rather
+% than chase a moving target. Without it the run has to begin with the arm already placed
 % by hand, which is not a thing anyone can do.
 T_HOLD = 10.0;              % seconds of hold before the path starts
 ts = time_scale * max(0.0, t - T_HOLD);   % scenario time after scaling (s)
+moving = double(t >= T_HOLD);  % 0 during the hold, 1 after. The RATES below
+                               %   are multiplied by it: a frozen position
+                               %   with the t = 0 velocity still commanded
+                               %   made the end effector settle KD/KP*|V|
+                               %   off the reference during the hold, 36 mm
+                               %   on the ellipse (22 Sep 2026).
 
 switch scenario
 
@@ -168,12 +174,12 @@ den = max(den, 1e-9);                   % V-bar and R-bar close on the chief,
 psi_dot = (p_des(1)*vel(2) - p_des(2)*vel(1)) / den;    % rad/s
 
 %% ------------------------------------------------------- twist and rate
-V_des = [vel(1); vel(2); 0; 0; 0; psi_dot];
+V_des = moving * [vel(1); vel(2); 0; 0; 0; psi_dot];
                         % 6x1 [v; omega], world. No commanded z velocity and
                         %   no roll or pitch rate: a planar path at fixed
                         %   height with a pure yaw pointing law.
 
-A_des = [acc(1); acc(2); 0; 0; 0; 0];
+A_des = moving * [acc(1); acc(2); 0; 0; 0; 0];
                         % 6x1 [a; alpha], world. Yaw acceleration is left at
                         %   zero; the PD attractor absorbs it. A scenario
                         %   commanding aggressive yaw would want the analytic

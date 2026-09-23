@@ -78,11 +78,13 @@ end
 fprintf('Calibration routine finished on hardware.\n');
  
 %% Send HOME Position, then park the arm there
-% CAL_ARM drove the joints to the firmware's own home. HOME only records the
-% start posture for the NEXT calibration (the firmware does not move on it),
-% so the arm is then parked with a normal angle command: ROME with zero wheel
-% speed and the six angles. The ESP32 splits that into the GV and ARM lines
-% and the Teensy validates the angles (ValidateTraj) before moving.
+% CAL_ARM drove the joints to the firmware's own home. HOME records the
+% start posture for the next calibration and, since Keanu's 22 Sep 2026
+% firmware, also sets the target angles, so the arm moves there through
+% ValidateTraj. The park command that follows is the same target sent the
+% way the model sends it (ROME with zero wheel speed and the six angles,
+% split by the ESP32 into the GV and ARM lines) and is what keeps the
+% Teensy's 500 ms watchdog from holding the arm short of the posture.
 homeCmd = sprintf('HOME,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n', homePosDeg);
 parkCmd = sprintf('ROME,0,0,0,0,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n', homePosDeg);
 

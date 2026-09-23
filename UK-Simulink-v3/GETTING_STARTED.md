@@ -7,7 +7,17 @@ Every other file that talks to the robot reads that block: `ROMECommand`
 `calibrateROMEArm` (parking pose), `check_9dof` / `gate_all` (the gate).
 Change a number there, re-run `gate_all`, and all of them follow.
 
-VERIFIED_LINE
+**Verification status, 22 September 2026, 22:00.** Pushed before the full
+gate finished, on purpose. What has been run with the current code:
+`check_guard` unit tests (9/9, joint cap included); the seed of every
+scenario is exact (position 1e-14 m, attitude 0.00 deg); time-resolved runs
+of scenarios 1 and 2 outside Simulink pass every gate threshold (scenario 1:
+hold quiet at 1.8 rpm and 9 um, lap peak 18.9 rpm, steady error 2 mm;
+scenario 2: peak 1.6 rpm, 75 um); the branch study completes all five laps
+inside the joint window. What has NOT been run yet: `gate_all` in the
+Simulink model with the 60 rpm ceiling, `derivation_checks`, and the
+placement-error sweep. **Do not put `EnableHardware = 1` until this
+paragraph says `gate_all` passed.** It will be updated in the next push.
 
 ---
 
@@ -128,8 +138,11 @@ check_guard     % the guard and the joint cap
 time. `verify_wheelmap` proves the model is self-consistent; it cannot see the
 wiring.
 
-**It will not stop.** `STOP_ALL` → `!` → Mega returns *before* writing PWM,
-so the last command stays applied. **Cut power.** Known gap.
+**It will not stop.** The arm does: `STOP_ALL` holds the joints where they
+are, and the Teensy's 500 ms watchdog holds them if commands stop (Keanu's
+22 Sep 2026 firmware). The base does not: `STOP_ALL` → `!` → Mega returns
+*before* writing PWM, so the last wheel command stays applied. **Cut
+power.** Known gap.
 
 **Camera mode misbehaves.** `EnableMotive = 1` has never been run. Fall back
 to `EnableMotive = 0` with `base_override` set; that path is gated.

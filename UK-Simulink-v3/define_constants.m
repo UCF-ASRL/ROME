@@ -2,7 +2,7 @@
 %  EDIT THIS BLOCK. NOTHING ELSE IN THIS FILE NEEDS TOUCHING.
 %  ========================================================================
 
-scenario = 3;          % 1 ellipse | 2 V-bar | 3 R-bar | 4 NMC | 5 circle
+scenario = 1;          % 1 ellipse | 2 V-bar | 3 R-bar | 4 NMC | 5 circle
 
 EnableHardware = 0;    % 0 simulate only. 1 commands the real robot.
 EnableMotive   = 0;    % 0 closes the loop on the model's own state.
@@ -258,9 +258,9 @@ fprintf('  Base    x %+7.3f m   y %+7.3f m   yaw %+7.2f deg\n', ...
         q0_9dof(1), q0_9dof(2), rad2deg(q0_9dof(3)));
 fprintf('  Arm     %s deg\n', num2str(rad2deg(q0_9dof(4:9)).', '%+8.2f'));
 fprintf('  Rates   all zero. Let it sit still before you start.\n');
-fprintf('\n  Order: place base -> CAL_ARM -> EnableHardware = 1.\n');
-fprintf('  The model drives the arm to the angles above by itself during\n');
-fprintf('  the 10 s start hold. arm_sign / arm_offset_deg are derived from\n');
+fprintf('\n  Order: place base -> calibrateROMEArm -> EnableHardware = 1.\n');
+fprintf('  calibrateROMEArm parks the arm at the angles above (mapped to\n');
+fprintf('  firmware degrees). arm_sign / arm_offset_deg are derived from\n');
 fprintf('  the AR3 files, not measured: run the jog test, GETTING_STARTED.md\n');
 fprintf('  step 3, before EnableHardware = 1. Joint commands are capped to\n');
 fprintf('  the firmware ranges, wheels to max_rpm.\n');

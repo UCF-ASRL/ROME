@@ -47,6 +47,34 @@ fprintf('\n=======================================================\n');
 fprintf('  9-DOF VERIFICATION  -  simulation only, no hardware\n');
 fprintf('=======================================================\n');
 
+%% STATIC CHECKS. One evaluation each, before any simulation. Both would
+% have caught a real bug on 22 September 2026 that a full run only showed
+% as "89 rpm and 36 mm during the hold":
+%   1. a frozen reference is frozen in position AND rates;
+%   2. a robot at rest on its exact seed, facing a static reference, does
+%      not move: one solve step must return ~0 rpm and ~0 displacement.
+% The second one is the formulation's own prediction of the hold, so any
+% posture, gravity or convention error shows here without a run.
+sc_  = evalin('base','scenario');  pr_ = evalin('base','par');
+els_ = evalin('base','elements');  mu0 = evalin('base','mu');
+ts_  = evalin('base','time_scale'); ds_ = evalin('base','dist_scale');
+zw_  = evalin('base','z_work');    dt_ = evalin('base','dt_9dof');
+q0_  = evalin('base','q0_9dof');
+r_ = evalin('base','r'); l_ = evalin('base','l'); al_ = evalin('base','alphas');
+[p0_,u0_,V0_,A0_] = EndEffectorTrajectory(0, sc_, els_, mu0, ts_, ds_, zw_, pr_);
+[p5_,~,V5_,A5_]   = EndEffectorTrajectory(5, sc_, els_, mu0, ts_, ds_, zw_, pr_);
+hold_ok = norm(p5_-p0_) < 1e-12 && norm([V0_;A0_;V5_;A5_]) < 1e-12;
+clear ukd_current
+[q1_,~,w1_] = ukd_current(q0_, zeros(9,1), p0_, u0_, V0_, A0_, dt_, 1, r_, l_, al_);
+e1_ = norm(ik9_fk(q1_) - p0_);  w1_ = max(abs(w1_));
+still_ok = e1_ < 1e-4 && w1_ < 3;
+fprintf('\n  static: %s hold reference frozen in position and rates\n', tag(hold_ok));
+fprintf('  static: %s at rest on the seed the solve stays put  (1 step: %.1e m, %.2f rpm)\n', ...
+        tag(still_ok), e1_, w1_);
+if ~(hold_ok && still_ok)
+    error('check_9dof:static', 'static checks failed; the run is not worth simulating');
+end
+
 if bdIsLoaded(mdl), close_system(mdl,0); end
 load_system(fullfile(here,[mdl '.slx']));
 set_param(mdl,'StopFcn','');

@@ -194,9 +194,16 @@ KD = [2*wp;2*wp;2*wp; 2*wr;2*wr;2*wr];  % derivative gain, same ordering (1/s)
 % cannot disturb the task: UK enforces the constraint rows exactly whatever
 % Q is, so this only selects WHICH null-space motion happens.
 kpost   = 3.0;                      % posture stiffness (1/s^2)
-posture = [0.10; 0.0; -0.5; 0.9; 0.0; 0.7; 0.0];
-                                    % preferred configuration,
-                                    %   [base yaw; joints 1..6] (rad)
+% The preferred configuration, [base yaw; joints 1..6] (rad), is the one the
+% run STARTS from: recorded from q_meas on the reset step, below. Until
+% 22 Sep 2026 it was a constant written into this file, Keanu's original
+% arm_home [0 -0.5 0.9 0 0.7 0] rad with base yaw 0.10, which no other file
+% referenced. When arm_home moved to a posture the AR3 can reach (J2 = 127
+% deg) the spring was wound 155 deg on J2 and pulled the base yaw to 5.7 deg
+% for the whole run: 89 rpm and 59 mm of error with a STATIC reference. The
+% start configuration is what the card prints, what calibrateROMEArm parks
+% the arm at, and what scenario_seeds screened, so it is the rest posture
+% by construction and cannot drift from them again.
 
 % No damping is applied. The solve below is the fundamental equation as
 % written, with the Moore-Penrose inverse, which is the form used by Udwadia
@@ -222,7 +229,7 @@ hfd  = 1e-6;                        % central-difference step for numerical
 % integrator rather than from differencing the measurement, which is far
 % less noisy at 20 Hz. Position error still comes from the measurement, so
 % the task loop is closed on the real pose.
-persistent q_int qd_int started
+persistent q_int qd_int started posture
 % q_int    9x1  integrated position command [x y theta q1..q6] (m, rad)
 % qd_int   9x1  integrated rate command (m/s, rad/s)
 % started  1x1  logical, false until the first call has seeded the state
@@ -230,10 +237,12 @@ if isempty(started)
     started = false;                  % first call, nothing seeded yet
     q_int   = zeros(9,1);             % command position state (m, rad)
     qd_int  = zeros(9,1);             % command rate state (m/s, rad/s)
+    posture = zeros(7,1);             % rest posture, set on the reset step
 end
 if reset ~= 0 || ~started
     q_int  = q_meas;                  % re-seed position from measurement
     qd_int = qd_meas;                 % re-seed rate from measurement
+    posture = q_meas(3:9);            % rest posture: where this run starts
     started = true;
 end
 
