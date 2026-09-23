@@ -72,6 +72,11 @@ classdef ROMECommand < matlab.System
                 jointDeg = evalin('base', 'arm_sign(:).''') .* jointDeg(:).' ...
                          + evalin('base', 'arm_offset_deg(:).''');
             end
+            % Arm freeze: keep the parked posture on the wire (define_constants,
+            % ARM FREEZE) while the Teensy cannot be flashed. Base unaffected.
+            if evalin('base', 'exist(''arm_freeze'',''var'') && arm_freeze ~= 0')
+                jointDeg = evalin('base', 'arm_freeze_deg(:).''');
+            end
             % Cap to what the firmware accepts, in firmware degrees, so a
             % posture outside the ranges is pulled to the end instead of
             % being rejected and silently not executed.

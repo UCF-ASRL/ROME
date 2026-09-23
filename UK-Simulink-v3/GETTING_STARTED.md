@@ -37,7 +37,18 @@ arm_sign       = [ 1 -1 -1  1  1  1];   % model -> firmware joint map, SEE STEP 
 arm_offset_deg = [-90 180 90  0  0  0]; %   firmware = arm_sign .* model + arm_offset_deg
 arm_fw_switch / arm_fw_other       % limits[] / otherLimits[], copied from ROME_Teensy_Code.ino
 arm_fw_margin_deg = 2.0;           % the cap stays this far inside both ends
+arm_freeze     = 1;                % 1 = arm stays parked all run; base only. SEE BELOW
 ```
+
+**`arm_freeze` (23 Sep 2026).** While the Teensy still has the direction
+bug in `encoderRunToVal_nb`, a commanded move on J1, J2 or J5 runs the
+wrong way to the range end. Calibration is unaffected (different path), but
+the model's joint commands change every step once the hold ends. With
+`arm_freeze = 1` `ROMECommand` sends the parked posture for the whole run,
+so the arm never moves and the base does everything the model asks: a
+pipeline test (comms, wheel map, cameras, guard), **not** a tracking test —
+the model believes the arm is moving. Set it to 0 only after flashing the
+fixed sketch and confirming every joint with `jog_joint`.
 
 Save, reopen the model. `define_constants` runs on every load and prints the
 card: where to put the base, what the arm angles are, in model degrees.

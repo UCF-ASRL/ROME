@@ -80,6 +80,17 @@ arm_offset_deg = [-90 180  90   0   0   0];  % added after the sign, degrees
 % the far end of travel. arm_clamp sorts each pair itself.
 arm_fw_switch = [-180  132  141 -165   90  180];  % limits[]      (switch side)
 arm_fw_other  = [ 160    0    1  165  -90 -170];  % otherLimits[] (non-switch side)
+% ARM FREEZE. 1 = the joint command sent to the robot is the parked start
+% posture for the whole run, whatever the model computes; the firmware sees
+% "already at target" and never moves the arm. Needed while the Teensy still
+% carries the direction bug in encoderRunToVal_nb (commanded moves on J1,
+% J2, J5 run the wrong way until the range end; calibration is unaffected).
+% The base still does everything the model asks, so comms, wheel map,
+% cameras and the guard get exercised; END-EFFECTOR TRACKING IS NOT
+% MEANINGFUL with this on, because the model believes the arm is moving.
+% Set to 0 only after the Teensy is flashed with the fix and jog_joint
+% shows every joint following its command.
+arm_freeze = 1;
 arm_fw_margin_deg = 2.0;    % cap stays this far inside BOTH ends of every
                             % joint, so a calibration off by this much still
                             % never reaches a switch. -90..90 becomes -88..88.
@@ -189,6 +200,10 @@ max_dist_projected = max_dist_3d;
 % them as literals would let them go stale without any sign.
 [q0_9dof, qd0_9dof] = scenario_seeds(scenario, elements, mu, ...
                                      time_scale, dist_scale, z_work, arm_home, dt_9dof);
+% The parked start posture in firmware degrees: what calibrateROMEArm sends,
+% and what ROMECommand keeps sending while arm_freeze = 1.
+arm_freeze_deg = arm_clamp(arm_sign(:).' .* rad2deg(q0_9dof(4:9)).' + arm_offset_deg(:).', ...
+                           arm_fw_switch, arm_fw_other, arm_fw_margin_deg);
 
 % START FROM REST. scenario_seeds returns pinv(Jc)*V_des(0) as the start rate,
 % nonzero in all nine coordinates and 0.166 m/s on base y. Nothing placed on a
