@@ -13,6 +13,8 @@ classdef ROMECommand < matlab.System
         armReady_
         lastTelemetryTime_
         residualBuffer_
+        t0_                 % tic at setup: the wall clock of the run (output t_wall)
+        jointDegSent_       % 6x1 last joint command sent, firmware degrees (output jointDegSent)
         
         % Pre-allocated Workspace Variables
         has_arm_map_ = false
@@ -37,7 +39,9 @@ classdef ROMECommand < matlab.System
             obj.residualBuffer_ = "";
             obj.armReady_ = false;
             obj.lastTelemetryTime_ = tic;
-            
+            obj.t0_ = tic;
+            obj.jointDegSent_ = zeros(6,1);
+
             % Load all base workspace variables ONCE to prevent real-time lag
             if evalin('base', 'exist(''arm_home'',''var'')')
                 obj.actualJointDeg_ = rad2deg(evalin('base','arm_home(:)'));
@@ -72,12 +76,31 @@ classdef ROMECommand < matlab.System
         %==============================================================
         % MAIN STEP (Runs every simulation step)
         %==============================================================
-        function [actualWheelRPM, actualJointDeg, armReady] = stepImpl(obj, wheelRPM, jointRad, Enable)
+        function [actualWheelRPM, actualJointDeg, armReady, jointDegSent, t_wall, telem_age] = stepImpl(obj, wheelRPM, jointRad, Enable)
             % Default outputs
             actualWheelRPM = obj.actualWheelRPM_;
             actualJointDeg = obj.actualJointDeg_;
             armReady       = obj.armReady_;
-            
+
+            % Joint command in firmware degrees, the same map, freeze and clamp the send path applies
+            % (24 Sep 2026: computed on every step, Enable or not, so a run logs what was, or would have
+            % been, sent; the hardware run of 24 Sep saved no sent or returned joint values).
+            jointDeg = rad2deg(jointRad(:).');
+            if obj.has_arm_map_
+                jointDeg = obj.arm_sign_ .* jointDeg + obj.arm_offset_deg_;
+            end
+            if obj.arm_freeze_
+                jointDeg = obj.arm_freeze_deg_;
+            end
+            if obj.has_arm_clamp_
+                [jointDeg, hit] = arm_clamp(jointDeg, obj.arm_fw_switch_, obj.arm_fw_other_, obj.arm_fw_margin_deg_);
+                if any(hit) && ~obj.clamp_warned
+                    warning('ROMECommand:clamp', 'arm command capped to the firmware range on joint(s) %s', mat2str(find(hit)));
+                    obj.clamp_warned = true;
+                end
+            end
+            obj.jointDegSent_ = jointDeg(:);
+
             if coder.target('MATLAB')
                 %------------------------------------------------------
                 % CONNECT ONCE
@@ -95,28 +118,7 @@ classdef ROMECommand < matlab.System
                 % SEND COMMANDS
                 %------------------------------------------------------
                 if Enable && ~isempty(obj.DeviceHandle)
-                    jointDeg = rad2deg(jointRad(:).');
-                    
-                    % 1. Model-to-firmware joint map
-                    if obj.has_arm_map_
-                        jointDeg = obj.arm_sign_ .* jointDeg + obj.arm_offset_deg_;
-                    end
-                    
-                    % 2. Arm freeze override
-                    if obj.arm_freeze_
-                        jointDeg = obj.arm_freeze_deg_;
-                    end
-                    
-                    % 3. Firmware clamping
-                    if obj.has_arm_clamp_
-                        % Using extrinsic call to prevent code gen issues with external functions
-                        [jointDeg, hit] = arm_clamp(jointDeg, obj.arm_fw_switch_, obj.arm_fw_other_, obj.arm_fw_margin_deg_);
-                        if any(hit) && ~obj.clamp_warned
-                            warning('ROMECommand:clamp', 'arm command capped to the firmware range on joint(s) %s', mat2str(find(hit)));
-                            obj.clamp_warned = true;
-                        end
-                    end
-                    
+                    % jointDeg: mapped, frozen and clamped above, the same values logged on output 4
                     msg = sprintf('ROME,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n', ...
                         wheelRPM(1), wheelRPM(2), wheelRPM(3), wheelRPM(4), ...
                         jointDeg(1), jointDeg(2), jointDeg(3), jointDeg(4), jointDeg(5), jointDeg(6));
@@ -186,8 +188,11 @@ classdef ROMECommand < matlab.System
             actualWheelRPM = obj.actualWheelRPM_;
             actualJointDeg = obj.actualJointDeg_;
             armReady       = obj.armReady_;
+            jointDegSent   = obj.jointDegSent_;
+            t_wall         = toc(obj.t0_);                  % s since setup
+            telem_age      = toc(obj.lastTelemetryTime_);   % s since the last telemetry line
         end
-        
+
         %==============================================================
         % SHUTDOWN
         %==============================================================
@@ -201,20 +206,23 @@ classdef ROMECommand < matlab.System
         %==============================================================
         % OUTPUT DEFINITIONS
         %==============================================================
+        % Outputs (24 Sep 2026): 1 actualWheelRPM 4x1 (GV telemetry, rpm), 2 actualJointDeg 6x1 (ARM
+        % telemetry un-mapped to model degrees), 3 armReady logical, 4 jointDegSent 6x1 (firmware deg),
+        % 5 t_wall 1x1 (s since setup), 6 telem_age 1x1 (s since the last telemetry line).
         function num = getNumOutputsImpl(~)
-            num = 3;
+            num = 6;
         end
-        function [o1,o2,o3] = getOutputSizeImpl(~)
-            o1 = [4 1]; o2 = [6 1]; o3 = [1 1];
+        function [o1,o2,o3,o4,o5,o6] = getOutputSizeImpl(~)
+            o1 = [4 1]; o2 = [6 1]; o3 = [1 1]; o4 = [6 1]; o5 = [1 1]; o6 = [1 1];
         end
-        function [o1,o2,o3] = getOutputDataTypeImpl(~)
-            o1 = "double"; o2 = "double"; o3 = "logical";
+        function [o1,o2,o3,o4,o5,o6] = getOutputDataTypeImpl(~)
+            o1 = "double"; o2 = "double"; o3 = "logical"; o4 = "double"; o5 = "double"; o6 = "double";
         end
-        function [o1,o2,o3] = isOutputComplexImpl(~)
-            o1 = false; o2 = false; o3 = false;
+        function [o1,o2,o3,o4,o5,o6] = isOutputComplexImpl(~)
+            o1 = false; o2 = false; o3 = false; o4 = false; o5 = false; o6 = false;
         end
-        function [o1,o2,o3] = isOutputFixedSizeImpl(~)
-            o1 = true; o2 = true; o3 = true;
+        function [o1,o2,o3,o4,o5,o6] = isOutputFixedSizeImpl(~)
+            o1 = true; o2 = true; o3 = true; o4 = true; o5 = true; o6 = true;
         end
     end
 end

@@ -215,7 +215,7 @@ hfd  = 1e-6;                        % central-difference step for numerical
 q = q_meas;
 [pe, Re, Tl, pc] = rome_fk(q, dh, link_m, link_c, mock_m, mock_c, h0);
 [Jv, Jw, Jc]     = rome_jac(q, Tl, pc, pe, h0);
-M = rome_mass(Jv, Jw, Tl, link_m, link_I, mock_m, mock_I, mb, Ib);
+M = rome_mass(Jv, Jw, Tl, link_m, link_c, link_I, mock_m, mock_c, mock_I, mb, Ib);
 end
 
 function [pe, Re, Tl, pc] = rome_fk(q, dh, link_m, link_c, mock_m, mock_c, h0)
@@ -368,7 +368,7 @@ function [Jv, Jw, Jc] = rome_jac(q, Tl, pc, pe, h0)
 end
 
 
-function M = rome_mass(Jv, Jw, Tl, link_m, link_I, mock_m, mock_I, mb, Ib)
+function M = rome_mass(Jv, Jw, Tl, link_m, link_c, link_I, mock_m, mock_c, mock_I, mb, Ib)
 %#codegen
 %ROME_MASS  Mass matrix by the link-Jacobian sum.
 %
@@ -407,12 +407,21 @@ function M = rome_mass(Jv, Jw, Tl, link_m, link_I, mock_m, mock_I, mb, Ib)
         Ii = diag(link_I(i,:)); % 3x3 inertia of link i about its own CoM,
                                 %   in its own frame (kg m^2)
         if i == 6
-            % Mock spacecraft rigidly attached: masses add, inertias add.
-            % The parallel-axis term for the offset between the two centres
-            % of mass is neglected here because that offset is small; add it
-            % once real geometry is available.
+            % Mock spacecraft rigidly attached: masses add, and the two
+            % inertias are referred to the COMBINED centre of mass by the
+            % parallel-axis theorem, exactly as rome_mass in the block does.
+            % Until 23 Sep 2026 this file skipped the transfer and so built a
+            % different M from the one the solve uses (the block's comment
+            % puts the transfer at 82 percent of the retained link-6 inertia).
             mi = link_m(6) + mock_m;    % combined mass (kg)
-            Ii = diag(link_I(6,:) + mock_I);    % combined inertia (kg m^2)
+            c6 = link_c(6,:).';         % 3x1 link 6 CoM in the link frame (m)
+            cm = mock_c;                % 3x1 payload CoM in the link frame (m)
+            cc = (link_m(6)*c6 + mock_m*cm)/mi;   % 3x1 combined CoM (m)
+            d6 = c6 - cc;               % 3x1 offsets from the combined CoM (m)
+            dm = cm - cc;
+            Ii = diag(link_I(6,:)) + diag(mock_I) ...
+                 + link_m(6)*((d6.'*d6)*eye(3) - d6*d6.') ...
+                 + mock_m  *((dm.'*dm)*eye(3) - dm*dm.');
         end
         Ri  = Tl(1:3,1:3,i);    % 3x3 orientation of link i, world
         Jvi = Jv(:,:,i);        % 3x9 linear Jacobian of link i
@@ -434,7 +443,7 @@ function M = rome_mass_at(q, dh, link_m, link_c, link_I, mock_m, mock_c, ...
 %   configurations.
     [pe, ~, Tl, pc] = rome_fk(q, dh, link_m, link_c, mock_m, mock_c, h0);
     [Jv, Jw, ~]     = rome_jac(q, Tl, pc, pe, h0);
-    M = rome_mass(Jv, Jw, Tl, link_m, link_I, mock_m, mock_I, mb, Ib);
+    M = rome_mass(Jv, Jw, Tl, link_m, link_c, link_I, mock_m, mock_c, mock_I, mb, Ib);
 end
 
 

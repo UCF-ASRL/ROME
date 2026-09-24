@@ -325,15 +325,17 @@ Q = -C_qd - g;              % 9x1 applied generalized force before the
 % through this block by compare_posture:
 %
 %   posture form              residual      joint travel   min s
-%   force (this line)         1.8-4.2e-11   0.91-3.14 rad  0.67-0.68
-%   M * PD, full M            1e93-1e145    diverges       0
-%   M(3:9,3:9) * PD           0.7-4.5e-12   6.20-6.95 rad  0.1555 on R-bar
+%   force (this line)         2.4e-12-1.2e-11  2.24-2.27 rad  0.668-0.677
+%   M * PD, full M            1e141-1e145      diverges       0
+%   M(3:9,3:9) * PD           2.3-3.5e-12      4.43-5.38 rad  0.054-0.216
+%   (compare_posture rerun 23 Sep 2026 on the tool-down geometry; the earlier
+%    table, 0.91-3.14 / 6.20-6.95 rad and 0.1555, was the tool-up geometry)
 %
 % The full-M form diverges in all five case studies because M is not block
 % diagonal: multiplying a posture PD by M pushes force into the free base
 % translation rows, which Peters' fixed-base arm does not have. Restricting
-% it to rows 3:9 removes the divergence but triples joint travel and drops
-% R-bar conditioning to 0.1555, below the 0.30 that scenario_seeds screens
+% it to rows 3:9 removes the divergence but doubles joint travel and drops
+% the smallest s along the run to 0.05-0.22, below the 0.30 that scenario_seeds screens
 % starts on. The force form is kept for that reason, not by oversight.
 Q(3:9) = Q(3:9) - kpost*(q(3:9) - posture) - 2*sqrt(kpost)*qd(3:9);
 
