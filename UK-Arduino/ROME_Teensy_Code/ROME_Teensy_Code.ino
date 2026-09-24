@@ -45,7 +45,8 @@ enum ArmState {
   UNCALIBRATED,
   CALIBRATING,
   READY,
-  FAULT
+  FAULT,
+  LIMIT_TEST  // Fixed: Added comma on previous line
 };
 
 ArmState armState = UNCALIBRATED;
@@ -94,6 +95,7 @@ AccelStepper steppers[] = {
 // ============================================================================
 void processSerialCommands();
 void updateROMEArm();
+void updateUncalibratedJog();
 void updateTelemetry();
 void checkWatchdog();
 void fullCalibrate();
@@ -137,6 +139,7 @@ void loop() {
   processSerialCommands();
   checkWatchdog();
   updateROMEArm();
+  updateUncalibratedJog(); // Added JOG Engine
   updateTelemetry();
 }
 
@@ -149,12 +152,10 @@ void processSerialCommands() {
   while (Serial6.available() > 0) {
     char c = (char)Serial6.read();
 
-    Serial.print("BYTE: ");
-    Serial.println((int)c);
-
     if (c == '\n' || c == '\r') {
       inputBuffer.trim();
       if (inputBuffer.length() > 0) {
+        
         // Command 1: CAL_ARM
         if (inputBuffer == "CAL_ARM") {
           armState = CALIBRATING;
@@ -163,23 +164,42 @@ void processSerialCommands() {
           Serial6.println("ARM_READY");
           lastCommandTime = millis();
         }
-        // Command 2: STOP_ALL (E-Stop / Motion Hold)
-        else if (inputBuffer == "STOP_ALL") {
+        
+        // Command 2: TEST_LIMITS (Hardware Diagnostics)
+        else if (inputBuffer == "TEST_LIMITS") {
+          armState = LIMIT_TEST;
           for (int i = 0; i < 6; i++) {
+            steppers[i].setSpeed(0);
+            steppers[i].move(0);
+            desiredJointDeg[i] = actualJointDeg[i];
+          }
+          Serial6.println("LIMIT_TEST_READY");
+          lastCommandTime = millis();
+        }
+        
+        // Command 3: STOP_ALL (E-Stop / Motion Hold / Test Exit)
+        else if (inputBuffer == "STOP_ALL") {
+          if (armState == LIMIT_TEST) armState = UNCALIBRATED;
+          for (int i = 0; i < 6; i++) {
+            steppers[i].move(0); // Safely halt uncalibrated jogs
             desiredJointDeg[i] = actualJointDeg[i];
           }
           lastCommandTime = millis();
         }
-        // Command 3: STATUS Query
+        
+        // Command 4: STATUS Query
         else if (inputBuffer == "STATUS") {
           switch (armState) {
             case UNCALIBRATED: Serial6.println("UNCALIBRATED"); break;
-            case CALIBRATING:   Serial6.println("CALIBRATING");   break;
-            case READY:         Serial6.println("READY");         break;
-            case FAULT:         Serial6.println("FAULT");         break;
+            case CALIBRATING:  Serial6.println("CALIBRATING");  break;
+            case READY:        Serial6.println("READY");        break;
+            case FAULT:        Serial6.println("FAULT");        break;
+            case LIMIT_TEST:   Serial6.println("LIMIT_TEST");   break;
           }
+          lastCommandTime = millis(); // Refresh watchdog during long jogs
         }
-        // Command 4: HOME,d1,d2,d3,d4,d5,d6
+        
+        // Command 5: HOME,d1,d2,d3,d4,d5,d6
         else if (inputBuffer.startsWith("HOME,")) {
           int idx = 5;
           for (int i = 0; i < 6; i++) {
@@ -188,14 +208,37 @@ void processSerialCommands() {
             if (nextIdx != -1) {
               float parsedVal = inputBuffer.substring(idx, nextIdx).toFloat();
               homePosDeg[i] = parsedVal;
-              desiredJointDeg[i] = parsedVal; // Keep desired angles in sync
+              desiredJointDeg[i] = parsedVal;
               idx = nextIdx + 1;
             }
           }
           lastCommandTime = millis();
         }
-        // Command 5: d1,d2,d3,d4,d5,d6 (Continuous Angle Target Command)
-        else if (armState == READY) {
+        
+        // Command 6: JOG,joint,delta (Uncalibrated manual jogging)
+        else if (inputBuffer.startsWith("JOG,")) {
+          int firstComma = inputBuffer.indexOf(',');
+          int secondComma = inputBuffer.indexOf(',', firstComma + 1);
+          if (firstComma != -1 && secondComma != -1) {
+            int j = inputBuffer.substring(firstComma + 1, secondComma).toInt();
+            float delta = inputBuffer.substring(secondComma + 1).toFloat();
+            
+            // Only allow manual jogging if NOT in normal tracking state
+            if (j >= 0 && j < 6 && armState != READY) {
+              int toward = (otherLimits[j] > limits[j]) ? 1 : -1;
+              long stepTarget = delta * stepsDeg[j] * negspeeds[j] * toward;
+              
+              steppers[j].setMaxSpeed(runSpeed);
+              steppers[j].setAcceleration(maxAccel);
+              steppers[j].move(stepTarget);
+              
+              lastCommandTime = millis();
+            }
+          }
+        }
+        
+        // Command 7: d1,d2,d3,d4,d5,d6 (Continuous Angle Target Command)
+        else if (armState == READY && !inputBuffer.startsWith("JOG")) {
           float parsedDeg[6];
           int count = 0;
           int idx = 0;
@@ -208,9 +251,7 @@ void processSerialCommands() {
           }
 
           if (count == 6) {
-            for (int i = 0; i < 6; i++) {
-              desiredJointDeg[i] = parsedDeg[i];
-            }
+            for (int i = 0; i < 6; i++) desiredJointDeg[i] = parsedDeg[i];
             lastCommandTime = millis();
           }
         }
@@ -219,13 +260,6 @@ void processSerialCommands() {
     } else {
       inputBuffer += c;
     }
-
-    if (inputBuffer.length() > 0)
-    {
-        Serial.print("RX: ");
-        Serial.println(inputBuffer);
-    }
-
   }
 }
 
@@ -233,11 +267,16 @@ void processSerialCommands() {
 // WATCHDOG PROTECTION
 // ============================================================================
 void checkWatchdog() {
-  if (armState == READY) {
-    if (millis() - lastCommandTime > WATCHDOG_TIMEOUT_MS) {
+  if (millis() - lastCommandTime > WATCHDOG_TIMEOUT_MS) {
+    if (armState == READY) {
       // Hold position: clamp target angles to actual positions
       for (int i = 0; i < 6; i++) {
         desiredJointDeg[i] = actualJointDeg[i];
+      }
+    } else {
+      // Cancel any active uncalibrated jogs
+      for (int i = 0; i < 6; i++) {
+        steppers[i].move(0);
       }
     }
   }
@@ -250,45 +289,68 @@ void updateROMEArm() {
   if (armState != READY) return;
 
   for (int i = 0; i < 6; i++) {
-    // Joint 4 currently has no physical encoder; bypass feedback step
-    if (i == 3)
-    {
-        // Open-loop Joint 4 control
-
-        float targetSteps =
-            desiredJointDeg[3] *
-            stepsDeg[3];
-
+    if (i == 3) {
+        float targetSteps = desiredJointDeg[3] * stepsDeg[3];
         steppers[3].moveTo((long)targetSteps);
-
         steppers[3].run();
-
-        // No encoder available, so report commanded value
-        actualJointDeg[3] =
-            desiredJointDeg[3];
-
+        actualJointDeg[3] = desiredJointDeg[3];
         continue;
     }
 
     int path = ValidateTraj(i, desiredJointDeg[i]);
-    if (path == 2) continue; // Out of bounds or already at target
+    if (path == 2) continue;
 
     float targetSteps = desiredJointDeg[i] * stepsDeg[i];
     encoderRunToVal_nb(i, targetSteps, path);
-
-    // Calculate live telemetry readings
     actualJointDeg[i] = (float)encoders[i].read() / countstep[i] / stepsDeg[i];
   }
 }
 
 // ============================================================================
-// TELEMETRY OUTPUT STREAM (Zero-Allocation Implementation)
+// UNCALIBRATED JOG ENGINE (Safe Relative Moves)
+// ============================================================================
+void updateUncalibratedJog() {
+  if (armState == READY || armState == LIMIT_TEST) return;
+  
+  for (int i = 0; i < 6; i++) {
+    if (steppers[i].distanceToGo() != 0) {
+      
+      // Safety Check: Prevent driving deeper into a pressed switch
+      if (digitalRead(LS[i].pin) == LOW) {
+        int moveDir = (steppers[i].distanceToGo() > 0) ? 1 : -1;
+        int switchDir = (negspeeds[i] > 0) ? -1 : 1; 
+        
+        if (moveDir == switchDir) {
+          steppers[i].move(0); // Hard stop! Driving into switch.
+          continue; 
+        }
+      }
+      steppers[i].run();
+    }
+  }
+}
+
+// ============================================================================
+// TELEMETRY OUTPUT STREAM
 // ============================================================================
 void updateTelemetry() {
   static uint32_t lastTelemetryTime = 0;
   if (millis() - lastTelemetryTime >= 50) { // 20 Hz updates
     lastTelemetryTime = millis();
 
+    // DIAGNOSTIC STREAM
+    if (armState == LIMIT_TEST) {
+      Serial6.print("LIMITS,");
+      for (int i = 0; i < 6; i++) {
+        int isPressed = (digitalRead(LS[i].pin) == LOW) ? 1 : 0;
+        Serial6.print(isPressed);
+        if (i < 5) Serial6.print(",");
+      }
+      Serial6.println();
+      return; 
+    }
+
+    // NORMAL STREAM
     const char* stateStr = "UNCALIBRATED";
     switch (armState) {
       case CALIBRATING: stateStr = "CALIBRATING"; break;
@@ -313,22 +375,16 @@ void fullCalibrate() {
   bool calibration_finished = false;
   bool limit_hit[6] = {false, false, false, false, false, false};
 
-  // Reset homing states
-  for (int i = 0; i < 6; i++) {
-    homeState[i] = IDLE;
-  }
+  for (int i = 0; i < 6; i++) homeState[i] = IDLE;
 
-  // Set initial calibration speeds for ALL 6 motors
   for (int i = 0; i < 6; i++) {
     steppers[i].setSpeed(-calspeed[i] * negspeeds[i]);
   }
 
-  // PHASE 1: Drive ALL motors (0 through 5) until their limit switches hit
+  // PHASE 1: Drive ALL motors to switches
   while (!limit_hit[0] || !limit_hit[1] || !limit_hit[2] || !limit_hit[3] || !limit_hit[4] || !limit_hit[5]) {
     for (int i = 0; i < 6; i++) {
-      if (limit_hit[i]) {
-        steppers[i].setSpeed(0);
-      }
+      if (limit_hit[i]) steppers[i].setSpeed(0);
       steppers[i].runSpeed();
     }
 
@@ -337,20 +393,23 @@ void fullCalibrate() {
         lastDebounce[i] = millis();
         steppers[i].setCurrentPosition((long)(limits[i] * stepsDeg[i]));
 
-        // Write encoder position only for joints that have physical encoders
         if (i != 3) {
           encoders[i].write((long)(limits[i] * stepsDeg[i] * countstep[i]));
         }
         limit_hit[i] = true;
+
+        // DEBUG: Notify MATLAB that limit was struck
+        Serial6.print("LIMIT,");
+        Serial6.println(i);
       }
     }
   }
 
-  // PHASE 2A: Drive joints WITH encoders (0, 1, 2, 4, 5) to home position
+  // PHASE 2A: Drive joints WITH encoders to home
   while (!calibration_finished) {
     calibration_finished = true;
     for (int i = 0; i < 6; i++) {
-      if (i == 3) continue; // Skip J4 in encoder loop
+      if (i == 3) continue;
       if (homeState[i] != DONE) {
         encoderRunToVal_nb(i, homePosDeg[i] * stepsDeg[i], 3);
         if (homeState[i] != DONE) calibration_finished = false;
@@ -358,13 +417,13 @@ void fullCalibrate() {
     }
   }
 
-  // PHASE 2B: Move Joint 4 open-loop to its home position
+  // PHASE 2B: Move Joint 4 open-loop home
   steppers[3].setMaxSpeed(runSpeed);
   steppers[3].setAcceleration(maxAccel);
   steppers[3].runToNewPosition((long)(homePosDeg[3] * stepsDeg[3]));
   homeState[3] = DONE;
 
-  // PHASE 3: Sync internal tracking variables
+  // PHASE 3: Sync variables
   for (int i = 0; i < 6; i++) {
     actualJointDeg[i]  = homePosDeg[i];
     desiredJointDeg[i] = homePosDeg[i];
@@ -387,19 +446,9 @@ void encoderRunToVal_nb(int x, float targetSteps, int path) {
   }
 
   steppers[x].setAcceleration(maxAccel);
-  // Direction toward the target, not from 'path'. AccelStepper steps in the
-  // setSpeed() direction whenever moveTo() sees an unchanged target, so the
-  // path-based signs (right for calibration, path 3) sent J1, J2, J5 the
-  // wrong way on commanded moves (22 Sep 2026). Which step sign INCREASES the
-  // angle differs per joint: negspeeds[x] is the step sign that goes from the
-  // switch toward otherLimits[x], so negspeeds[x] * sgn(otherLimits - limits)
-  // increases the angle; times the sign of the error gives the direction to
-  // the target. For path 3 (calibration) this equals the old +negspeeds.
-  // 'path' still gates the call: ValidateTraj returns 2 for out-of-range or
-  // already-there.
   if (path != 0 && path != 1 && path != 3) return;
-  int toward = (otherLimits[x] > limits[x]) ? 1 : -1;   // sign of angle increase, in steps of negspeeds
-  int dir    = (error > 0) ? 1 : -1;                     // do we need the angle to increase
+  int toward = (otherLimits[x] > limits[x]) ? 1 : -1;
+  int dir    = (error > 0) ? 1 : -1;
   steppers[x].setSpeed(runSpeed * negspeeds[x] * toward * dir);
 
   steppers[x].moveTo(actual + error);

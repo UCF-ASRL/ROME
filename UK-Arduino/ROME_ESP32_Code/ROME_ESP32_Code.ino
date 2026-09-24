@@ -123,13 +123,13 @@ void processCommand(String cmd)
     // Ground Vehicle Handshake
     if (cmd == "START_GV")
     {
-        GVSerial.println("Y");
+        GVSerial.println(cmd); // <--- Forwards the exact string instead of "Y"
         Serial.println("[CMD] START_GV -> Mega");
         return;
     }
  
     // Arm System Handshake & Commands
-    if (cmd == "START_ARM" || cmd == "CAL_ARM" || cmd == "STATUS" || cmd.startsWith("HOME"))
+    if (cmd == "START_ARM" || cmd == "CAL_ARM" || cmd == "STATUS" || cmd == "TEST_LIMITS" || cmd.startsWith("HOME") || cmd.startsWith("JOG,"))
     {
         ARMSerial.println(cmd);
         Serial.print("[CMD] Arm Forward: ");

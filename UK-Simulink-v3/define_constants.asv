@@ -37,7 +37,7 @@ base_override = [NaN; NaN; NaN];        % [x (m); y (m); yaw (deg)]
 %
 % The defaults below are deliberately slow for a first run. Turn them up one
 % step at a time, re-running gate_all each time.
-speed_factor = 1.0;   % of the designed speed. Wheel peak scales with it:
+speed_factor = 0.;   % of the designed speed. Wheel peak scales with it:
                        %   0.50 asked 113 rpm with the tool down (22 Sep 2026).
                        %   0.25 keeps the peak under the 60 rpm ceiling below.
 size_factor  = 0.50;   % of the designed size
