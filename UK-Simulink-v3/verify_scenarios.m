@@ -36,10 +36,16 @@ fprintf('=======================================================\n');
 fails = 0;
 
 %% 1 -- scenario 1 still matches the 3-DOF model
-tt = linspace(0, T_scaled, 400);
+% Since 24 Sep 2026 EndEffectorTrajectory runs on the onset clock sigma(t)
+% (manuscript eq:scaling) and scales mu by dist_scale^3; OrbitTrajectory does
+% neither, so it is evaluated at sigma(t), with mu*D^3, its velocity times sigma'.
+T_ON = 10;                  % onset duration (s), restated from EndEffectorTrajectory
+tt = linspace(0, T_scaled + T_ON/2, 400);
 d  = 0;
 for t = tt
-    [q_des, q_dot_des] = OrbitTrajectory_ref(t, elements, mu, time_scale, dist_scale);
+    [sg, sgd] = onset_clock(t, T_ON);
+    [q_des, q_dot_des] = OrbitTrajectory_ref(sg, elements, mu*dist_scale^3, time_scale, dist_scale);
+    q_dot_des = q_dot_des*sgd;
     [p, ~, V] = EndEffectorTrajectory(t, 1, elements, mu, time_scale, dist_scale, zw, [0 0 0 0]);
     d = max([d, norm(p(1:2)-q_des(1:2)), norm(V(1:2)-q_dot_des(1:2))]);
 end
@@ -50,7 +56,7 @@ tt = linspace(0, 100, 400);   r_max = 0;  err = 0;
 for t = tt
     [p,~,V] = EndEffectorTrajectory(t, 2, elements, mu, S, D, zw, VB);
     r_max = max(r_max, abs(p(1)));
-    err   = max(err, abs(p(2) - (VB(1) - VB(2)*t)));   % against Eq. (23)
+    err   = max(err, abs(p(2) - (VB(1) - VB(2)*onset_clock(t, T_ON))));   % against Eq. (23) at t~ = sigma(t)
 end
 fails = fails + rep('V-bar radial identically zero', r_max, 1e-14, r_max);
 fails = fails + rep('V-bar in-track matches Eq. (23)', err, 1e-12, err);
@@ -60,13 +66,13 @@ i_max = 0;  err = 0;
 for t = tt
     [p,~,~] = EndEffectorTrajectory(t, 3, elements, mu, S, D, zw, RB);
     i_max = max(i_max, abs(p(2)));
-    err   = max(err, abs(p(1) - (RB(1) - RB(2)*t)));   % against Eq. (24)
+    err   = max(err, abs(p(1) - (RB(1) - RB(2)*onset_clock(t, T_ON))));   % against Eq. (24) at t~ = sigma(t)
 end
 fails = fails + rep('R-bar in-track identically zero', i_max, 1e-14, i_max);
 fails = fails + rep('R-bar radial matches Eq. (24)', err, 1e-12, err);
 
 %% 4 and 5 -- NMC geometry and CW satisfaction
-Tp = 2*pi/n_chief;  tt = linspace(0, Tp, 2000);
+Tp = 2*pi/n_chief;  tt = linspace(0, Tp + T_ON/2, 2000);   % whole path, onset included
 ell = 0;  cw = 0;
 for k = 1:numel(tt)
     t = tt(k);
@@ -78,9 +84,13 @@ for k = 1:numel(tt)
     % Unforced Clohessy-Wiltshire, in-plane (manuscript Eq. 28):
     %   xddot - 3 n^2 x - 2 n ydot = 0
     %   yddot            + 2 n xdot = 0
-    r1 = A(1) - 3*n_chief^2*p(1) - 2*n_chief*V(2);
-    r2 = A(2) + 2*n_chief*V(1);
-    cw = max(cw, max(abs([r1 r2])));
+    % Only after the onset: while sigma' < 1 the floor reference is the NMC
+    % re-clocked, which is not a solution of the unforced CW equations.
+    if t >= T_ON
+        r1 = A(1) - 3*n_chief^2*p(1) - 2*n_chief*V(2);
+        r2 = A(2) + 2*n_chief*V(1);
+        cw = max(cw, max(abs([r1 r2])));
+    end
 end
 fails = fails + rep('NMC 2:1 ellipse identity (x/rho)^2+(y/2rho)^2=1', ell, 1e-12, ell);
 fails = fails + rep('NMC satisfies unforced CW exactly', cw, 1e-12, cw);
@@ -147,6 +157,17 @@ ok = val < tol;
 if ok, t = '[OK]'; else, t = '[--]'; end
 fprintf('  %s %-42s %.3e\n', t, name, shown);
 bad = ~ok;
+end
+
+
+function [sg, sgd] = onset_clock(t, T_ON)
+% Reference clock t_des(t) of manuscript eq:scaling (s) and its rate (-).
+if t < T_ON
+    sg  = t/2 - (T_ON/(2*pi))*sin(pi*t/T_ON);
+    sgd = (1 - cos(pi*t/T_ON))/2;
+else
+    sg  = t - T_ON/2;   sgd = 1;
+end
 end
 
 

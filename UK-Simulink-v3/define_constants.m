@@ -37,17 +37,52 @@ base_override = [NaN; NaN; NaN];        % [x (m); y (m); yaw (deg)]
 %
 % The defaults below are deliberately slow for a first run. Turn them up one
 % step at a time, re-running gate_all each time.
-speed_factor = 1.0;   % of the designed speed. Wheel peak scales with it:
-                       %   0.50 asked 113 rpm with the tool down (22 Sep 2026).
-                       %   0.25 keeps the peak under the 60 rpm ceiling below.
+speed_factor = 1.0;    % of the designed speed. Wheel peak scales with it:
+                       %   0.25 gave 14.6 rpm on the ellipse (24 Sep 2026, onset model);
+                       %   1.0 restored on 24 Sep 2026 (evening) at the author's request,
+                       %   with max_rpm raised to 80 below so the gate can pass.
 size_factor  = 0.50;   % of the designed size
 
-% WHEEL CEILING. CommandGuard scales the whole wheel vector down to this,
-% and check_9dof FAILS a run whose solve asks for more, because a scaled
-% command means the real base moves slower than the model believes. The
-% firmware's own cap is 120 (MAX_RPM in MatlabPIDLoop.ino); 60 is a first-
-% run margin on top of that. Raise it one step at a time with gate_all.
-max_rpm = 60;          % rev/min
+% WHEEL CEILING. The student-tunable wheel limit. CommandGuard scales every
+% wheel command down to it, the whole vector at once so the direction is
+% kept, and check_9dof FAILS a run whose solve asks for more, because a
+% scaled command means the real base moves slower than the model believes.
+% The firmware's hard cap is 120 rev/min (#define MAX_RPM 120,
+% UK-Arduino/ROME_Mega_Code/ROME_Mega_Code.ino:8). 80 was set by the author
+% on 19 Nov 2026: "80 is okay. The 60 was an old estimate, but we actually
+% dont know for sure. I think 80 is okay. This should be tunable on the
+% define_constants though". Tuning it is Plan 2's max_rpm study (TRACKER P4).
+% Change it one step at a time, re-running gate_all each time.
+max_rpm = 80;          % wheel limit (rev/min), applied by CommandGuard
+
+% MEASUREMENT MODEL (simulation, EnableMotive = 0; added 24 Sep 2026). The
+% controller does not read the model's state. It reads a simulated
+% measurement of it, through the SensorModel block: the base pose as the
+% cameras would report it, with white Gaussian noise at the vendor's stated
+% accuracy, and the joint angles as the arm firmware reports them, at one
+% motor step. The rates are not measured; UKDynamics integrates its own.
+% sensor_model = 0 passes the exact state through (the loop before this
+% date). The plant itself is unchanged: the command one step late is the
+% state the ideal actuators are taken to reach.
+sensor_model = 1;                         % 1 measured state | 0 exact state
+mocap_sigma  = [0.3e-3; 0.3e-3; deg2rad(0.05)];
+                       % 3x1 standard deviation of the camera noise on x, y (m)
+                       %   and yaw (rad). OptiTrack, "Motion Capture for
+                       %   Robotics" (web page, Literature Review, accessed
+                       %   24 Sep 2026): "positional error under 0.3 mm and
+                       %   rotational error under 0.05 deg". The stated bound
+                       %   is used as the standard deviation, which is the
+                       %   conservative reading of it.
+mocap_seed   = [11 12 13];                % Random Number seeds per channel, fixed so a run repeats
+enc_step_deg = 1 ./ [44.44444444, 55.55555556, 55.55555556, 46.66666667, 10, 20];
+                       % 1x6 one motor step per joint (deg): stepsDeg in
+                       %   Arm/WorkingCode/Stepper_Commands_JacobsVer/
+                       %   Stepper_Commands_JacobsVer.ino (ucf-asrl/ROME),
+                       %   the table the firmware uses to convert steps to
+                       %   degrees and to report the encoder position.
+                       %   J1 0.0225, J2 0.0180, J3 0.0180, J4 0.0214,
+                       %   J5 0.100, J6 0.050 deg.
+enc_step_rad = deg2rad(enc_step_deg(:));  % 6x1 the same in rad, what SensorModel uses
 
 % ARM JOINT CONVENTION. The model's joint angles and the Teensy firmware's
 % are NOT the same numbers. Model J2 = 0 is the upper arm hanging straight
@@ -95,10 +130,20 @@ arm_fw_other  = [ 160    0    1  165  -90 -170];  % otherLimits[] (non-switch si
 % MEANINGFUL with this on, because the model believes the arm is moving.
 % Set to 0 only after the Teensy is flashed with the fix and jog_joint
 % shows every joint following its command.
-arm_freeze = 1;
+% WARNING: ON THE ROBOT THIS IS NOT HONOURED YET. ROMECommand.m L54-57
+% ("FORCE ARM FREEZE OFF") sets arm_freeze = 0 at every hardware setup, so
+% with EnableHardware = 1 the arm moves whatever is written here. The freeze
+% is to be applied upstream in the model, Plan 2 Task 5 (author decision
+% 19 Nov 2026: ROMECommand.m stays Keanu's; freeze upstream).
+arm_freeze = 1;        % 1 hold the arm at arm_freeze_deg | 0 arm follows the model (flag); see WARNING
 arm_fw_margin_deg = 2.0;    % cap stays this far inside BOTH ends of every
                             % joint, so a calibration off by this much still
                             % never reaches a switch. -90..90 becomes -88..88.
+clearance_margin = 0.05; % m. check_9dof fails a run whose arm link points come closer than
+                         % this to z = 0 (clearance_9dof z_min, whole run). z = 0 is the base
+                         % plate / floor / table plane of the model; every z shifts with the
+                         % unmeasured 0.20 m mount height (ik9_fk.m).
+                         % [Claude's call - author to confirm value]
 
 %% ========================================================================
 %  Below here is the formulation. Leave it alone.
@@ -115,7 +160,13 @@ l = 0.35; % distance from robot C.G to wheels meters
 d = 0.45; % length of robot side(s) meters
 w = 0.45; % width of robot side(s) meters 
 Izz = (1/12)*m*(d^2+w^2); % base moment of interia
-alphas = [deg2rad(315), deg2rad(225), deg2rad(135), deg2rad(45)]; % angle to each wheel from positive y-axis
+% Wheel angles (CLAUDE.md section 15). Thesis Figure 6 plus Table 1 define
+% the angles counter-clockwise from +x, ascending 45/135/225/315 deg, with
+% drive direction [-sin, cos]. This line lists them descending and the wheel
+% map uses +sin; section 15: "descending with `+sin` equals ascending with
+% `-sin` (5.6e-15), so the deployed model and the 9-DOF `UKDynamics` block
+% compute the correct map." Do not change this line alone (section 15).
+alphas = [deg2rad(315), deg2rad(225), deg2rad(135), deg2rad(45)]; % 1x4 wheel angles (rad), descending, used with the +sin map; see above
 
 %% Execution Flags
 
@@ -148,7 +199,17 @@ arm_home  = deg2rad([-3.0; 127.0; -10.0; 0.0; -27.0; 0.0]);
                     % Inside the workspace and AWAY FROM THE STRETCHED
                     % SINGULARITY. A straight arm sits on that singularity,
                     % so the run does not start there.
-% max_rpm is in the user block above (60); the firmware's own cap is 120.
+tool_tilt_deg = 0;  % tilt of the tool z axis from straight down, about the tool's
+                    %   own horizontal (y) axis (deg). 0 = tool at the floor, as every
+                    %   run before 24 Sep 2026. Positive tips the tool tip toward the
+                    %   chief. Enters only the reference attitude (EndEffectorTrajectory,
+                    %   trailing optional argument); the start posture follows through
+                    %   scenario_seeds, and check_9dof rebuilds the reference with it.
+                    %   Probed on scenario 1 at +15 and -15 deg (24 Sep 2026): both seed
+                    %   and screen stable, s 0.683 / 0.667 against 0.677 at 0, no joint
+                    %   clamped, J5 -13.2 / -33.7 firmware deg against -23.8.
+% max_rpm is in the user block above (80, author 19 Nov 2026); the firmware's
+% own cap is 120 (ROME_Mega_Code.ino:8).
                     % CommandGuard saturates the wheel command to this before
                     % it reaches ROMECommand.
 EnableArm = 0;      % used by check_9dof and build_9dof only; the model has
@@ -193,6 +254,35 @@ time_scale = S_s  * speed_factor;
 dist_scale = D_s  * size_factor;
 T_scaled   = tf_s / speed_factor;
 
+% RUN LENGTH. EndEffectorTrajectory starts from rest with a raised-cosine onset
+% over T_ON, after which its clock lags t by T_ON/2, so the path ends at
+% T_scaled + T_ON/2. Every simulation path runs to T_stop: the model's StopTime
+% ('T_stop'), check_9dof / gate_all (through the model) and run_9dof_cases.
+T_ON   = 10.0;                % reference onset (s), must equal EndEffectorTrajectory.m T_ON (tests/test_run_length.m parses both)
+T_stop = T_scaled + T_ON/2;   % run length (s): the whole path, onset included
+
+% SENSOR MODEL OFF ON HARDWARE (final review I5(4), 19 Nov 2026). With
+% sensor_model ~= 0 the SensorModel block adds synthetic camera noise
+% (mocap_sigma) and joint quantisation (enc_step_rad) to the state the
+% controller reads. That noise is simulation-only: on the robot the
+% controller must read the real measurement, not a made-up error on top of
+% it. Lab main has no SensorModel block. apply_pacing (below, and at every
+% run start) refuses a hardware run with sensor_model ~= 0, so this override
+% must stay ABOVE the apply_pacing call.
+if EnableHardware ~= 0
+    sensor_model = 0;  % forced: 0 exact state to the controller (flag)
+    fprintf('define_constants: EnableHardware ~= 0, so sensor_model is forced to 0 (synthetic sensor noise is simulation-only).\n');
+end
+
+% PACING. Real-time pacing of the model only when the real robot is commanded
+% (EnableHardware = 1); a simulation-only run goes as fast as it can. The rule
+% lives in apply_pacing.m, which the model also calls from its InitFcn at every
+% run start. Set here only when the model is loaded, so this file still runs
+% with no model open.
+if bdIsLoaded('ROME_9DOF')
+    apply_pacing('ROME_9DOF');
+end
+
 % Distance Calculations (Projected onto the floor)
 % Max distance from center occurs at apogee: r = a(1+e)
 max_dist_3d = a * (1 + e) * dist_scale; 
@@ -204,7 +294,7 @@ max_dist_projected = max_dist_3d;
 % the orbital elements, the scaling, z_work or arm_home change. Carrying
 % them as literals would let them go stale without any sign.
 [q0_9dof, qd0_9dof] = scenario_seeds(scenario, elements, mu, ...
-                                     time_scale, dist_scale, z_work, arm_home, dt_9dof);
+                                     time_scale, dist_scale, z_work, arm_home, dt_9dof, tool_tilt_deg);
 % The parked start posture in firmware degrees: what calibrateROMEArm sends,
 % and what ROMECommand keeps sending while arm_freeze = 1.
 arm_freeze_deg = arm_clamp(arm_sign(:).' .* rad2deg(q0_9dof(4:9)).' + arm_offset_deg(:).', ...
@@ -232,7 +322,7 @@ if ~any(isnan(base_override)) && ~EnableMotive
     q0_9dof(2) = base_override(2);
     q0_9dof(3) = deg2rad(base_override(3));
     [p_ref0, u_ref0] = EndEffectorTrajectory(0, scenario, elements, mu, ...
-                                             time_scale, dist_scale, z_work, par);
+                                             time_scale, dist_scale, z_work, par, tool_tilt_deg);
     q0_9dof = ik9_warm_start(q0_9dof, p_ref0, u_ref0);
     q0_9dof(1:3) = [base_override(1); base_override(2); deg2rad(base_override(3))];
 end

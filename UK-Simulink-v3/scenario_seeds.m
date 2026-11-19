@@ -1,4 +1,4 @@
-function [q0, qd0] = scenario_seeds(scenario, elements, mu, S, D, z_work, arm_home, dt)
+function [q0, qd0] = scenario_seeds(scenario, elements, mu, S, D, z_work, arm_home, dt, tool_tilt_deg)
 %SCENARIO_SEEDS  Initial configuration and rates for the selected case study.
 %
 %   Both seeds depend on the trajectory, so they are solved for whichever
@@ -12,8 +12,9 @@ function [q0, qd0] = scenario_seeds(scenario, elements, mu, S, D, z_work, arm_ho
 %     qd0  9x1  rates giving the commanded twist at t = 0, pinv(Jc)*V_des(0).
 %               Starting from rest against a reference already in motion
 %               produces a wheel-speed burst in the first second.
+if nargin < 9, tool_tilt_deg = 0; end   % tool tilt (deg), see EndEffectorTrajectory
 par = scenario_par(scenario);       % 1x4 parameters for this case study
-[p0, u0, V0] = EndEffectorTrajectory(0, scenario, elements, mu, S, D, z_work, par);
+[p0, u0, V0] = EndEffectorTrajectory(0, scenario, elements, mu, S, D, z_work, par, tool_tilt_deg);
 % Damped least squares converges to whichever branch is nearest its starting
 % guess (Wampler 1986; Nakamura and Hanafusa 1986), and the branch decides
 % whether the run holds together: on V-bar one guess gives 6.6 m of error
@@ -61,7 +62,7 @@ for gk = 1:numel(guess)
     if seed_conditioning(qc) < s_min
         continue                        % too close to a singularity to start
     end
-    if probe_stable(qc, scenario, elements, mu, S, D, z_work, par, dt)
+    if probe_stable(qc, scenario, elements, mu, S, D, z_work, par, dt, tool_tilt_deg)
         q0 = qc;   break
     end
 end
@@ -86,17 +87,17 @@ s = sqrt(max(min(eig(Jc*(M\Jc.'))), 0));
 end
 
 
-function ok = probe_stable(q0, scenario, elements, mu, S, D, z_work, par, dt)
+function ok = probe_stable(q0, scenario, elements, mu, S, D, z_work, par, dt, tool_tilt_deg)
 %PROBE_STABLE  Does this branch stay bounded over the opening of the run?
 %   Forty steps is enough: a bad branch leaves the reference by more than a
 %   metre inside ten.
 q   = q0;
-[~,~,V0] = EndEffectorTrajectory(0, scenario, elements, mu, S, D, z_work, par);
+[~,~,V0] = EndEffectorTrajectory(0, scenario, elements, mu, S, D, z_work, par, tool_tilt_deg);
 qd  = pinv(ik9_jac(q0)) * V0;
 ok  = true;
 for k = 1:40
     t = (k-1)*dt;
-    [p,u,V,A] = EndEffectorTrajectory(t, scenario, elements, mu, S, D, z_work, par);
+    [p,u,V,A] = EndEffectorTrajectory(t, scenario, elements, mu, S, D, z_work, par, tool_tilt_deg);
     [qc, qdc] = rome_uk_block(q, qd, p, u, V, A, dt, double(k==1));
     q = qc;  qd = qdc;
     e = norm(ik9_fk(q) - p);

@@ -1,0 +1,12 @@
+ROME_merged: the paper's 9-DOF formulation (ROME_9DOF_Integration, final paper V3) merged with the lab's hardware files from ucf-asrl/ROME UK-Simulink-v3; every merge decision is in ../docs/merge/CLASSIFICATION.md.
+The step-by-step procedure for students (calibration, hardware runs) is Plan 3 and is not written yet; do not use the hardware scripts here before it exists.
+To check the folder, run in MATLAB R2026a from ROME_merged/tests: `test_suite`
+
+## Changes vs lab main
+
+What changes on the robot compared with lab `main @ 9867ca4` (evidence: TRACKER.md section 2, row "Hardware-visible behaviour", 19 Nov 2026):
+1. `max_rpm` 60 -> 80 (author decision, 19 Nov: "80 is okay. The 60 was an old estimate, but we actually dont know for sure. I think 80 is okay. This should be tunable on the define_constants though"). Firmware hard cap 120.
+2. The 10 s hard hold is replaced by the raised-cosine onset: ellipse wheel peak 77.8 -> 42.9 rpm. The hold was a safety measure against the earlier divergence (TRACKER section 0).
+3. StopTime 26 s -> `T_stop` = 31 s on the ellipse (55 s on scenarios 2-5): the run now covers the whole path.
+4. SensorModel noise is forced off on hardware (`sensor_model = 0` when `EnableHardware ~= 0`; a run with it on is refused). Lab main has no SensorModel.
+5. Real-time pacing is off only when `EnableHardware = 0`, enforced at every run start (`apply_pacing`); Fast Restart is refused on hardware.

@@ -1,5 +1,5 @@
 function [p_des, u_des, V_des, A_des] = EndEffectorTrajectory(t, scenario, ...
-                        elements, mu, time_scale, dist_scale, z_work, par)
+                        elements, mu, time_scale, dist_scale, z_work, par, tool_tilt_deg)
 %ENDEFFECTORTRAJECTORY  SE(3) end-effector reference for the 9-DOF UK solve.
 %
 %   Replaces OrbitTrajectory in the 9-DOF model. Produces the pose, twist and
@@ -36,6 +36,10 @@ function [p_des, u_des, V_des, A_des] = EndEffectorTrajectory(t, scenario, ...
 %     time_scale  1x1  time scale factor S (dimensionless)
 %     dist_scale  1x1  distance scale factor D (dimensionless)
 %     z_work      1x1  end-effector working height above the table (m)
+%     tool_tilt_deg 1x1 tilt of the tool z axis from straight down, about the
+%                      tool's own y axis (deg). OPTIONAL, default 0, which is the
+%                      reference as it was before 24 Sep 2026. Positive tips the
+%                      tool tip toward the chief. Set in define_constants.
 %     par         1x4  scenario parameters, meaning set by `scenario`:
 %                        2  V-bar : [y0   v0   0    0]   m, m/s
 %                        3  R-bar : [x0   v0   0    0]   m, m/s
@@ -64,20 +68,27 @@ function [p_des, u_des, V_des, A_des] = EndEffectorTrajectory(t, scenario, ...
 % pos, vel, acc are 2x1 [radial; in-track] at the scenario's own scale.
 pos = zeros(2,1);   vel = zeros(2,1);   acc = zeros(2,1);
 
-% HOLD AT THE START. The reference does not begin until t_hold has passed,
-% so the arm has time to drive itself to the start pose while the base sits
-% still. Before that the reference is frozen at its t = 0 value, position AND
-% rates, so the end effector is asked to sit still at a fixed point rather
-% than chase a moving target. Without it the run has to begin with the arm already placed
-% by hand, which is not a thing anyone can do.
-T_HOLD = 10.0;              % seconds of hold before the path starts
-ts = time_scale * max(0.0, t - T_HOLD);   % scenario time after scaling (s)
-moving = double(t >= T_HOLD);  % 0 during the hold, 1 after. The RATES below
-                               %   are multiplied by it: a frozen position
-                               %   with the t = 0 velocity still commanded
-                               %   made the end effector settle KD/KP*|V|
-                               %   off the reference during the hold, 36 mm
-                               %   on the ellipse (22 Sep 2026).
+% SMOOTH ONSET. The end effector starts at rest on the reference, so the
+% reference starts from rest too: its clock sigma(t) rises from zero with
+% zero rate and zero acceleration, and position, velocity and acceleration
+% are continuous from t = 0. The rate sigma' is a raised cosine over T_ON,
+% after which the clock runs at one and lags t by T_ON/2, so the path ends
+% at t = T_scaled + T_ON/2. Until 24 Sep 2026 the reference was held for 10 s
+% and then released; the release stepped the reference velocity from zero to
+% its t = 0 value inside one sample and the constraint answered with K_D
+% times the step (486 mm/s^2 on the ellipse). The chain rule for a
+% re-clocked trajectory (velocity times sigma', acceleration times sigma'^2
+% plus velocity times sigma'') is applied after the similarity scaling
+% below; the companion script checks it against finite differences.
+T_ON = 10.0;                % seconds of onset (s)
+if t < T_ON
+    sg   = t/2 - (T_ON/(2*pi))*sin(pi*t/T_ON);   % clock sigma (s), sigma(0) = 0
+    sgd  = (1 - cos(pi*t/T_ON))/2;               % sigma', 0 at t = 0 and 1 at T_ON
+    sgdd = (pi/(2*T_ON))*sin(pi*t/T_ON);         % sigma'' (1/s), 0 at both ends
+else
+    sg = t - T_ON/2;   sgd = 1.0;   sgdd = 0.0;
+end
+ts = time_scale * sg;       % scenario time after scaling (s)
 
 switch scenario
 
@@ -147,10 +158,18 @@ if scenario ~= 1
     acc = D * S^2 * acc;
 end
 
+% Onset clock, chain rule (acceleration first: it uses the un-clocked velocity).
+acc = acc * sgd^2 + vel * sgdd;     % d^2/dt^2 of pos(sigma(t)) (m/s^2)
+vel = vel * sgd;                    % d/dt of pos(sigma(t)) (m/s)
+
 %% ------------------------------------------------------------- position
 p_des = [pos(1); pos(2); z_work];   % 3x1 world position (m). The path is
                                     %   planar; the end effector holds a
                                     %   constant working height.
+
+if nargin < 9
+    tool_tilt_deg = 0;      % tilt of the tool z axis from straight down (deg)
+end
 
 %% ------------------------------------------------------------- attitude
 % Point at the chief, which sits at the origin.
@@ -162,7 +181,22 @@ psi = atan2(-p_des(2), -p_des(1));      % desired yaw (rad)
 % conditioning (s = 0.68) and puts the elbow above the shoulder where the
 % real arm can be. As a quaternion, scalar first:
 %   [c; 0; 0; s] (x) [0; 1; 0; 0] = [0; c; s; 0],   c = cos(psi/2), s = sin(psi/2)
-u_des = [0; cos(psi/2); sin(psi/2); 0]; % 4x1 quaternion, scalar first
+u_dn = [0; cos(psi/2); sin(psi/2); 0];  % 4x1 tool down, R = Rz(psi) Rx(pi), scalar first
+% Optional tilt about the tool y axis, R = Rz(psi) Rx(pi) Ry(tilt): the tool z
+% leaves straight down by tool_tilt_deg, positive toward the chief. The extra
+% rotation is constant in the tool frame, so the angular velocity and
+% acceleration below, which are those of Rz(psi), are unchanged. At 0 deg
+% u_ty = [1; 0; 0; 0] and the product returns u_dn exactly.
+ht   = 0.5 * deg2rad(tool_tilt_deg);    % half tilt angle (rad)
+u_ty = [cos(ht); 0; sin(ht); 0];        % 4x1 quaternion of Ry(tilt), scalar first
+a0 = u_dn(1); av = u_dn(2:4);           % scalar and vector parts of the two factors
+b0 = u_ty(1); bv = u_ty(2:4);
+u_des = [a0*b0 - (av(1)*bv(1) + av(2)*bv(2) + av(3)*bv(3)); ...
+         a0*bv + b0*av + [av(2)*bv(3) - av(3)*bv(2); ...
+                          av(3)*bv(1) - av(1)*bv(3); ...
+                          av(1)*bv(2) - av(2)*bv(1)]];
+                                        % 4x1 desired attitude u_dn (x) u_ty, unit
+                                        %   quaternion, scalar first
 
 % Analytic d/dt of atan2(y,x) = (x ydot - y xdot)/(x^2 + y^2). The pi offset
 % between the outward bearing and the inward one differentiates away, so the
@@ -173,17 +207,31 @@ den = max(den, 1e-9);                   % V-bar and R-bar close on the chief,
                                         %   the guard keeps this bounded
 psi_dot = (p_des(1)*vel(2) - p_des(2)*vel(1)) / den;    % rad/s
 
+% Analytic second derivative of the same bearing (quotient rule on psi_dot
+% with N = x ydot - y xdot and den = x^2 + y^2):
+%   psi_ddot = (x yddot - y xddot)/den - 2 N (x xdot + y ydot)/den^2.
+% Until 24 Sep 2026 this was left at zero and the attractor had to produce
+% the reference yaw acceleration out of attitude error: locally the yaw
+% error then obeys phi_ddot + K_D phi_dot + K_P phi/2 = -psi_ddot, with a
+% quasi-steady error 2 psi_ddot/K_P (the 1/2 because e_R = phi/2); the
+% companion (ROME_Derivations.m, feed-forward section) evaluates it on the
+% ellipse. The position rows already carried their reference acceleration;
+% this makes the attitude rows consistent with them. verify_eetraj checks
+% the expression against a central difference of psi_dot.
+Nn = p_des(1)*vel(2) - p_des(2)*vel(1);                  % numerator N (m^2/s)
+psi_ddot = (p_des(1)*acc(2) - p_des(2)*acc(1)) / den ...
+         - 2 * Nn * (p_des(1)*vel(1) + p_des(2)*vel(2)) / den^2;    % rad/s^2
+
 %% ------------------------------------------------------- twist and rate
-V_des = moving * [vel(1); vel(2); 0; 0; 0; psi_dot];
+V_des = [vel(1); vel(2); 0; 0; 0; psi_dot];
                         % 6x1 [v; omega], world. No commanded z velocity and
                         %   no roll or pitch rate: a planar path at fixed
                         %   height with a pure yaw pointing law.
 
-A_des = moving * [acc(1); acc(2); 0; 0; 0; 0];
-                        % 6x1 [a; alpha], world. Yaw acceleration is left at
-                        %   zero; the PD attractor absorbs it. A scenario
-                        %   commanding aggressive yaw would want the analytic
-                        %   second derivative here rather than a difference.
+A_des = [acc(1); acc(2); 0; 0; 0; psi_ddot];
+                        % 6x1 [a; alpha], world. The yaw acceleration is the
+                        %   analytic second derivative of the pointing law,
+                        %   fed forward like the translational acceleration.
 end
 
 

@@ -11,8 +11,13 @@ home = arm_home(:);
 j = [0.1; -0.2; 0.3; 0; 0.7; 0];
 nvec = [-1; 1; -1; 1];              % left null vector of the wheel map:
                                     %   any achievable wheel set has nvec'*w = 0
+% Sections 0-3 pass the ceiling 120 rpm as a TEST INPUT: the firmware wheel cap, MAX_RPM in
+% UK-Arduino/ROME_Mega_Code/ROME_Mega_Code.ino:8 (#define MAX_RPM 120). Section 2c repeats the
+% scaling checks at max_rpm from define_constants, the ceiling the model actually passes.
 
 %% 0. soft start ramps the wheel command in over 40 steps (2 s at 20 Hz)
+% CommandGuard.m only. The CommandGuard chart the model runs has no soft start (Q-T3c, TRACKER section 3);
+% section 6 tests the chart.
 % The arm is NOT ramped: it is already at the commanded pose and ramping it
 % would walk it away from there.
 clear CommandGuard
@@ -30,7 +35,7 @@ assert(abs(seen(3) - 100)    < 1e-9, 'step 40 should be full, got %.3f', seen(3)
 [wr, ~, ~] = CommandGuard(wfull, j, 120, home);
 assert(abs(max(abs(wr)) - 100) < 1e-9, 'ramp did not stay at full after 40 steps');
 assert(abs(nvec.'*wr) < 1e-9, 'ramp broke the wheel consistency condition');
-fprintf('  [OK] soft start 1/40 -> half -> full          over 40 steps\n');
+fprintf('  [OK] soft start 1/40 -> half -> full          over 40 steps (CommandGuard.m ONLY: the model''s CommandGuard chart has no soft start, Q-T3c)\n');
 
 %% 1. clean command passes through untouched, once the ramp is complete
 clear CommandGuard
@@ -61,6 +66,33 @@ fprintf('  [OK] scaled  |n''w| = %.2e rpm   (clipping the same command: %.1f rpm
 assert(abs(nvec.'*w) < 1e-9, 'scaling broke the consistency condition');
 assert(abs(nvec.'*clipped) > 1, 'clipping was expected to break it');
 
+%% 2c. the same scaling at the model's own ceiling, max_rpm from define_constants
+wm = wi * (max_rpm/120);                  % over-limit test vector (rev/min), peak 2.5*max_rpm
+[w, ~, f] = CommandGuard(wm, j, max_rpm, home);
+assert(max(abs(w)) <= max_rpm + 1e-12, 'not limited at max_rpm %g: %s', max_rpm, mat2str(w.', 4));
+assert(abs(max(abs(w)) - max_rpm) < 1e-9, 'did not scale to max_rpm %g: %s', max_rpm, mat2str(w.', 4));
+assert(norm(cross3(w, wm)) < 1e-9, 'direction changed at max_rpm: %s vs %s', mat2str(w.', 4), mat2str(wm.', 4));
+assert(f == 1, 'scaling at max_rpm raised flag %d, expected 1', f);
+pk_m = max(abs(w));                       % peak after scaling at max_rpm (rev/min)
+[w, ~, ~] = CommandGuard(wa*4, j, max_rpm, home);              % achievable command, over max_rpm
+assert(abs(nvec.'*w) < 1e-9, 'scaling at max_rpm broke the consistency condition');
+fprintf('  [OK] over-limit command scaled to max_rpm   flag 1, peak %.1f rpm (max_rpm %g from define_constants)\n', ...
+        pk_m, max_rpm);
+
+%% 2d. commands just above the ceiling are scaled to it exactly, at both ceilings (Task 7c)
+% Sections 2 and 2c use one vector 2.5x over; a guard that let up to 1 % through passed them (Task 7b,
+% break cg5_overshoot). Tolerance 1e-9 rpm: the scaled peak w*(lim/peak) differs from lim only by
+% rounding, of order eps*120 = 2.7e-14 rpm, so 1e-9 rpm is round-off margin, not a physical allowance.
+for lim_t = [120, max_rpm]                      % ceiling under test (rev/min)
+    for fo = [1 + 1e-6, 1.001, 1.005, 1.01, 1.5]  % overshoot factor of the peak wheel (-)
+        wo = [1; -0.5; 0.25; -0.75] * lim_t * fo;    % over-limit command, peak lim_t*fo on wheel 1 (rev/min)
+        [w, ~, f] = CommandGuard(wo, j, lim_t, home);
+        assert(max(abs(w)) <= lim_t + 1e-9 && abs(max(abs(w)) - lim_t) < 1e-9 && f == 1, ...
+               'not scaled to the ceiling %g at overshoot %g: peak %.12g rpm, flag %d', lim_t, fo, max(abs(w)), f);
+    end
+end
+fprintf('  [OK] overshoot 1e-6 .. 50 %% scaled to the ceiling exactly   120 and max_rpm %g, tolerance 1e-9 rpm\n', max_rpm);
+
 %% 3. non-finite wheel: base stopped, last finite joint command held
 [w, jo, f] = CommandGuard([1; NaN; 3; 4], j + 0.5, 120, home);
 %#ok<*NASGU>
@@ -73,6 +105,14 @@ fprintf('  [OK] NaN blocked, base stopped, arm held     flag 2\n');
 [w, jo, f] = CommandGuard([1; 2; 3; 4], [Inf; 0; 0; 0; 0; 0], 120, home);
 assert(isequal(w, zeros(4,1)) && isequal(jo, j) && f == 2, 'Inf joint not blocked');
 fprintf('  [OK] Inf joint blocked                       flag 2\n');
+
+%% 4c. NaN joint is blocked the same way, and every joint output is finite (Task 7c)
+% Section 3 feeds a NaN wheel and 4 an Inf joint; a guard that let a NaN JOINT through passed them
+% (Task 7b, break cg5_nanjoint).
+[w, jo, f] = CommandGuard([1; 2; 3; 4], [0; NaN; 0; 0; 0; 0], 120, home);
+assert(all(isfinite(jo)), 'NaN joint passed through: joint output %s', mat2str(jo.', 3));
+assert(isequal(w, zeros(4,1)) && isequal(jo, j) && f == 2, 'NaN joint not blocked');
+fprintf('  [OK] NaN joint blocked, joints finite        flag 2\n');
 
 %% 4b. before any finite command, the hold is arm_home, not zeros
 clear CommandGuard
@@ -88,6 +128,7 @@ for k = 1:2000
     wi = 1e3*randn(4,1);  ji = randn(6,1);
     if mod(k, 7) == 0,  wi(randi(4)) = NaN;  end
     if mod(k, 11) == 0, ji(randi(6)) = Inf;  end
+    if mod(k, 13) == 0, ji(randi(6)) = NaN;  end   % NaN joints too (Task 7c)
     [w, jo, ~] = CommandGuard(wi, ji, 120, home);
     assert(all(isfinite(w)) && all(isfinite(jo)), 'non-finite output at draw %d', k);
     worst = max(worst, max(abs(w)));
@@ -129,6 +170,25 @@ w  = squeeze(out.wheel_speeds_rpm.Data);
 mr = evalin('base','max_rpm');
 assert(max(abs(w(:))) > mr, 'this case was meant to exceed the ceiling %g, peak was %.1f', mr, max(abs(w(:))));
 assert(any(gf == 1), 'guard never reported saturation while the solve asked for %.1f rpm', max(abs(w(:))));
+% What the model SENDS (Task 7c): wheel_sent logs the CommandGuard chart's wheel_out, the signal that also
+% feeds ROMECommand (ROME_9DOF.slx simulink/systems/system_root.xml: line 214#out:1 -> 216#in:1 ROMECommand and
+% 227#in:1 'To Workspace wheel_sent'). Before, only guard_flag and the solve's request were read, so a chart
+% that flagged saturation but sent the command unscaled passed (Task 7b, break cg6_nolimit; NV-12).
+ws = squeeze(out.wheel_sent.Data);  if size(ws, 1) ~= 4, ws = ws.'; end   % 4 x N wheel command sent (rev/min)
+if size(w, 1) ~= 4, w = w.'; end                                       % 4 x N solve request (rev/min)
+gf = gf(:).';                                                           % 1 x N guard flag (-)
+assert(isequal(size(ws), size(w)) && numel(gf) == size(ws, 2), 'wheel_sent %s, wheel_speeds_rpm %s, guard_flag %d samples do not align', ...
+       mat2str(size(ws)), mat2str(size(w)), numel(gf));
+pk1 = max(abs(ws(:, gf == 1)), [], 1);                                  % per flagged step, peak wheel sent (rev/min)
+assert(all(pk1 <= mr + 1e-9), 'the guard chart sent %.3f rpm (wheel_sent) on a step it flagged 1; max_rpm %g', max(pk1), mr);
+assert(all(abs(pk1 - mr) < 1e-9), 'the guard chart scaled a flagged step to %.6f rpm, not to max_rpm %g', min(pk1), mr);   % 1e-9 rpm: round-off, as 2d
+% Flag-0 steps must be sent unchanged. This holds only because the CHART has no soft start (sections 0-5b test
+% CommandGuard.m, which ramps the first 40 steps; the chart does not, Q-T3c). A chart refresh from the file
+% (Q-T3c) requires reworking this assertion: the ramped first 2 s would then differ from the request.
+d0 = max(max(abs(ws(:, gf == 0) - w(:, gf == 0))));                     % flag-0 steps: sent minus requested (rev/min)
+if isempty(d0), d0 = 0; end
+assert(d0 < 1e-9, 'the guard chart altered an unflagged command by %.3g rpm', d0);
+fprintf('  [OK] model guard output (wheel_sent)        flagged steps sent at max_rpm %g (peak %.6f), unflagged sent unchanged\n', mr, max(pk1));
 fprintf('  [OK] model run at size_factor = 4            solve asked %.1f rpm, guard saturated on %d of %d steps\n', ...
         max(abs(w(:))), sum(gf == 1), numel(gf));
 

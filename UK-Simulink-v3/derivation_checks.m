@@ -8,7 +8,7 @@ function derivation_checks()
 %   is not modified.
 
 here = fileparts(mfilename('fullpath'));  cd(here);  addpath(here);
-dataDir = 'C:\Users\jbelmonte\OneDrive\Joao M. R. Belmonte\UCF\Research';
+dataDir = fullfile(here, 'data');              % folder of the three recorded runs scaled_factor_*.mat (lab files, UK-Simulink-v3)
 evalc('define_constants');                     % r, l, alphas, dt_9dof, arm_home, z_work
 R1 = load(fullfile(dataDir, 'scaled_factor_0.1_scenario1.mat'));
 R2 = load(fullfile(dataDir, 'scaled_factor_1.0_scenario1_semimajor0.5.mat'));
@@ -177,7 +177,12 @@ fprintf('   %-12s %-22s %8s %10s %10s %10s\n', 'case', 'variant', 'steps', 'peak
 C3 = struct('sc',1,'el',R3.elements,'mu',R3.mu,'S',R3.time_scale,'D',R3.dist_scale,'par',[0 0 0 0],'tf',R3.T_scaled);
 CV = struct('sc',2,'el',elements,'mu',mu,'S',SV2,'D',DV,'par',pV,'tf',tfV);
 C1 = struct('sc',1,'el',R1.elements,'mu',R1.mu,'S',R1.time_scale,'D',R1.dist_scale,'par',[0 0 0 0],'tf',R1.T_scaled);
-C1f = C1;  C1f.mu = R1.mu*R1.dist_scale^3;
+C1f = C1;  C1f.mu = R1.mu;   % gravitational parameter passed RAW (-): EndEffectorTrajectory applies mu*dist_scale^3 itself (CLAUDE.md section 27)
+T_ON = 10.0;                 % reference onset (s), EndEffectorTrajectory.m line 83; the reference clock lags t by T_ON/2 after it
+C1f.tf = R1.T_scaled + T_ON/2;   % run length (s): one full lap, the same stop time as run_9dof_cases
+fw_cap = 120;                % wheel speed cap of the firmware (rev/min): UK-Arduino/ROME_Mega_Code/ROME_Mega_Code.ino:8, #define MAX_RPM 120
+                             %   Section M asks whether the corrected cases COMPLETE and stay executable on the
+                             %   hardware, so the bound is the firmware cap, not the model gate's max_rpm.
 qdV0 = pinv(ik9_jac(qV)) * EV0(CV, z_work);
 rows = {
   'run 3',  'as recorded',            C3,  R3.q0_9dof, R3.qd0_9dof, 0
@@ -188,7 +193,7 @@ rows = {
   'V-bar',  'damping fix only',       CV,  qV,         qdV0,        1
   'V-bar',  'screened start',         CV,  qVs,        qdVs,        0
   'run 1',  'as recorded',            C1,  R1.q0_9dof, R1.qd0_9dof, 0
-  'run 1',  'mu*D^3 + screened',      C1f, [],         [],          1 };
+  'run 1',  'screened+damp full lap', C1f, [],         [],          1 };
 res = zeros(size(rows,1), 4);
 for i = 1:size(rows,1)
     C = rows{i,3};  q0 = rows{i,4};  qd0 = rows{i,5};
@@ -199,8 +204,10 @@ for i = 1:size(rows,1)
     res(i,:) = [Rr.steps Rr.peak Rr.res Rr.rmse];
     fprintf('   %-12s %-22s %8s %10.3g %10.2g %10.3g\n', rows{i,1}, rows{i,2}, Rr.stepstr, Rr.peak, Rr.res, Rr.rmse);
 end
-check(res(3,1) > 0 && res(3,2) < 120 && res(4,1) > 0 && res(7,1) > 0 && res(9,1) > 0 && res(9,2) < 120, ...
-      'M: a corrected case did not complete within 120 rpm');
+check(res(3,1) > 0 && res(3,2) < fw_cap && res(4,1) > 0 && res(7,1) > 0 && res(9,1) > 0 && res(9,2) < fw_cap, ...
+      sprintf('M: a corrected case did not complete under the firmware cap of %g rpm', fw_cap));
+fprintf('   corrected cases complete under the firmware cap (%g rpm): run 3 screened %.1f rpm, run 1 screened+damp full lap %.1f rpm\n', ...
+        fw_cap, res(3,2), res(9,2));
 fprintf('\nAll checks passed.\n');
 end
 

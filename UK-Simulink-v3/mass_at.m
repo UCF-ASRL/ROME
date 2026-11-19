@@ -1,4 +1,14 @@
-function [M, Jc] = mass_at(q_meas)
+function [M, Jc, g, Cqd, Jcd, pe, Re, P] = mass_at(q_meas, qd)
+%MASS_AT  [M, Jc] = mass_at(q) returns the nine-coordinate mass matrix and the
+%   end-effector Jacobian of the UKDynamics block at configuration q, with the
+%   block's own constants and functions (the code below is that block).
+%   [M, Jc, g, Cqd, Jcd, pe, Re, P] = mass_at(q, qd) also returns the gravity
+%   load g (9x1), the Coriolis and centrifugal force C(q,qd) qd (9x1), the
+%   Jacobian rate dJc/dt (6x9) at rate qd, the end-effector position pe (3x1)
+%   and orientation Re (3x3), and P, a struct with the block's gains KP, KD,
+%   kpost and its wheel map (r_w, l_w, alph, and wheels = @(q, qd) rad/s).
+%   These outputs let ROME_Derivations.m reproduce one controller step from
+%   the manuscript's equations and compare it with the block (24 Sep 2026).
 %#codegen
 %ROME_UK_BLOCK  Udwadia-Kalaba constraint solve, shaped for a Simulink MATLAB
 %Function block. Outputs POSITION commands.
@@ -216,6 +226,27 @@ q = q_meas;
 [pe, Re, Tl, pc] = rome_fk(q, dh, link_m, link_c, mock_m, mock_c, h0);
 [Jv, Jw, Jc]     = rome_jac(q, Tl, pc, pe, h0);
 M = rome_mass(Jv, Jw, Tl, link_m, link_c, link_I, mock_m, mock_c, mock_I, mb, Ib);
+if nargout > 2
+    if nargin < 2, qd = zeros(9,1); end
+    g = rome_grav(q, dh, link_m, link_c, mock_m, mock_c, gvec, h0, hfd);
+    % Coriolis and centrifugal force by the Christoffel identity, exactly as
+    % the block computes it: (C qd) = (dM/dt) qd - dT/dq, T = 1/2 qd' M qd.
+    Mp = rome_mass_at(q + hfd*qd, dh, link_m, link_c, link_I, mock_m, mock_c, mock_I, mb, Ib, h0);
+    Mm = rome_mass_at(q - hfd*qd, dh, link_m, link_c, link_I, mock_m, mock_c, mock_I, mb, Ib, h0);
+    Mdot_qd = ((Mp - Mm)/(2*hfd))*qd;
+    dTdq = zeros(9,1);
+    for k = 1:9
+        dq_k = zeros(9,1); dq_k(k) = hfd;
+        Tp = 0.5*qd.'*rome_mass_at(q+dq_k, dh, link_m, link_c, link_I, mock_m, mock_c, mock_I, mb, Ib, h0)*qd;
+        Tm = 0.5*qd.'*rome_mass_at(q-dq_k, dh, link_m, link_c, link_I, mock_m, mock_c, mock_I, mb, Ib, h0)*qd;
+        dTdq(k) = (Tp - Tm)/(2*hfd);
+    end
+    Cqd = Mdot_qd - dTdq;
+    Jcd = rome_jdot(q, qd, dh, link_m, link_c, mock_m, mock_c, h0, hfd);
+    P = struct('KP', KP, 'KD', KD, 'kpost', kpost, 'r_w', r_w, 'l_w', l_w, 'alph', alph, 'hfd', hfd, ...
+               'wheels', @(qq, qqd) rome_wheels(qq, qqd, r_w, l_w, alph), 'wheelmap', @(qq, qqd, rr, ll, al) rome_wheels(qq, qqd, rr, ll, al), ...
+               'fk', @(qq) rome_fk(qq, dh, link_m, link_c, mock_m, mock_c, h0), 'r2q', @(R) rome_r2q(R), 'qmul', @(a, b) rome_qmul(a, b));
+end
 end
 
 function [pe, Re, Tl, pc] = rome_fk(q, dh, link_m, link_c, mock_m, mock_c, h0)
