@@ -33,6 +33,7 @@ outdir = fullfile(here, 'runs'); if ~isfolder(outdir), mkdir(outdir); end
 mdl = 'ROME_9DOF';
 names = {'Elliptical orbit','V-bar','R-bar','NMC','Circle'};
 
+assert_sim_mode('run_9dof_cases', 'file', fullfile(here,'define_constants.m'));   % F12: once, before custody
 orig = claim_constants();
 restore = onCleanup(@() release_constants(orig)); %#ok<NASGU>
 fprintf('\n%-17s %7s %9s %9s %11s %11s %8s %8s %8s\n', 'case', 'T [s]', 'peak rpm', 'min s', ...
@@ -45,9 +46,11 @@ for sc = 1:5
 
     evalin('base', 'clear all');
     evalin('base', sprintf('run(''%s'');', fullfile(here,'define_constants.m')));
-    assignin('base','EnableHardware',0);
-    assignin('base','EnableMotive',0);
     assignin('base','EnableArm',0);
+    % RUN MODE (focus plan F12). This simulates run mode 1 only. The flags come from run_mode in define_constants.m,
+    % and load_system's PostLoadFcn re-runs define_constants, so an assignin of the flags would be overwritten: the mode is
+    % ASSERTED instead (assert_sim_mode, shared by every runner), here and again after load_system.
+    assert_sim_mode('run_9dof_cases', 'base');
     T_scaled = evalin('base','T_scaled');  dt = evalin('base','dt_9dof');
     max_rpm  = evalin('base','max_rpm');
     T_ON     = evalin('base','T_ON');     % onset length (s), define_constants; the reference clock lags t by T_ON/2 after it
@@ -61,12 +64,15 @@ for sc = 1:5
     else
         if bdIsLoaded(mdl), close_system(mdl,0); end
         load_system(fullfile(here,[mdl '.slx']));
+        try, assert_sim_mode('run_9dof_cases', 'base'); catch em_, close_system(mdl,0); rethrow(em_); end   % after the PostLoadFcn
         set_param(mdl,'StopFcn','');
-        % pacing: EnableHardware = 0 is set in the base workspace above, so apply_pacing (InitFcn)
+        % pacing: EnableHardware = 0 comes from run_mode = 1 (asserted above), so apply_pacing (InitFcn)
         % turns pacing off at the start of this run (tests/test_pacing.m case b)
         clear ukd_current
         out = sim(mdl, 'SimulationMode','normal', 'ReturnWorkspaceOutputs','on', ...
                   'StopTime', num2str(T_stop, '%.10g'));   % = the model's saved 'T_stop'
+        fprintf('  run flags (read back after the sim): EnableMotive %g, motive_source %s, motive_emulate_noise %g, sensor_model %g\n', ...
+                evalin('base','EnableMotive'), evalin('base','motive_source'), evalin('base','motive_emulate_noise'), evalin('base','sensor_model'));
         close_system(mdl,0);
 
         g = @(n) as_rows(squeeze(out.(n).Data));

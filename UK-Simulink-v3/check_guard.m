@@ -6,6 +6,7 @@ function check_guard()
 
 here = fileparts(mfilename('fullpath'));  cd(here);
 addpath(here, fullfile(here,'Ground Vehicle'), fullfile(here,'Optitrack'));
+assert_sim_mode('check_guard', 'file', fullfile(here, 'define_constants.m'));   % F12: section 6 simulates; mode 1 only
 evalc('define_constants');          % arm_home, max_rpm, alphas, r, l
 home = arm_home(:);
 j = [0.1; -0.2; 0.3; 0; 0.7; 0];
@@ -162,6 +163,7 @@ wf('define_constants.m', regexprep(orig, 'size_factor\s*=\s*[0-9.]+;', 'size_fac
 if bdIsLoaded('ROME_9DOF'), close_system('ROME_9DOF', 0); end
 evalin('base', 'clear guard_flag');
 load_system(fullfile(here, 'ROME_9DOF.slx'));
+try, assert_sim_mode('check_guard', 'base'); catch em_, close_system('ROME_9DOF', 0); rethrow(em_); end   % after the PostLoadFcn
 set_param('ROME_9DOF', 'StopFcn', '');
 out = sim('ROME_9DOF', 'SimulationMode', 'normal', 'ReturnWorkspaceOutputs', 'on');
 close_system('ROME_9DOF', 0);

@@ -17,7 +17,7 @@ function fig_9dof_cases()
 %   text (PAPER_WRITING_RULES.md, section 15). Prints the Table 3 line for
 %   each case and writes figures/fig_9dof_cases_values.txt.
 here = fileparts(mfilename('fullpath'));
-addpath(fullfile(here, '..', '..', '..', 'plot_style'));   % house style: Research/plot_style
+if isfolder(fullfile(here, 'plot_style')), addpath(fullfile(here, 'plot_style')); else, addpath(fullfile(here, '..', '..', '..', 'plot_style')); end   % house style: plot_style/ (copied unchanged, README.md); fallback only the review folder's Research/plot_style
 addpath(here);
 OUT = fullfile(here, '..', 'figures', 'matlab');   % the manuscript's figures are the PowerPoint charts of code/make_results_pptx.py (24 Sep 2026); this MATLAB twin is the cross-check and the values table
 if ~isfolder(OUT), mkdir(OUT); end

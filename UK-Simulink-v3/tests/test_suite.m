@@ -20,6 +20,23 @@ function test_suite()
 %                              the deck, base-pose invariance, 'ar3' oracle, tie to commanding_check
 %    14 test_motive_reader     NatNet frame parser (msgId, rigid-body ID, finite, quaternion norm) and
 %                              MotiveData hold/valid/nDropped through a no-socket test seam (Plan 2 Task 1)
+%    15 test_hw_nocam         hardware mode without cameras end to end against a recording fake robot
+%                              (temp copy, no network): sent lines = simulation commands step by step, pacing,
+%                              limits, no sensor noise, STOP_ALL last at normal end and error stop (Plan 2 Task 1c),
+%                              arm_freeze = 1 holds the sent joints at arm_freeze_deg (vi, Plan 2 Task 5 / F1)
+%    16 test_arm_freeze        upstream arm freeze offline: switch output = q0_9dof(4:9) = arm_freeze_deg also on
+%                              a second Run after ROMECommand's arm_freeze = 0 override, = CommandGuard output with
+%                              arm_freeze = 0, banner, ROMECommand.m = lab 63a10aa blob (Plan 2 Task 5 (iv) / F1)
+%    17 test_motive_model      absolute floor-frame camera path with the real-camera source ('optitrack'), injected
+%                              NatNet pose, reader gate, motive_cal refusal (focus plan F5b; added by F7, ruling I3)
+%    18 test_motive_source     motive_source values, the 'optitrack'-only refusal at both call sites, define_constants
+%                              in a function workspace with a fresh / stale base (focus plan F7, F5b review I1)
+%    19 test_motive_emulator   camera emulator: exact plumbing, paper noise (Table 3), robot mode 2 against the fake
+%                              robot with fake arm telemetry, unwrap reset between runs and in Fast Restart (F7, I2)
+%    20 test_run_mode          one-number mode selector (F12): rome_mode through the model's four Mode buttons gives the
+%                              author's four flag sets and arm source; bad run_mode refused at load; only the digit
+%                              changes; stale-SHA refusal; the gate and case runner refuse any mode but 1
+%    21 test_run_mode_core     run_mode_table and set_run_mode on synthetic text (F12 core): flags, refusals, CRLF/LF
 %   and asserts that define_constants.m has the same SHA-256 before and after
 %   (gate_all, check_guard and run_9dof_cases rewrite it under the PRISTINE lock,
 %   CLAUDE.md section 20.4) and that no define_constants.PRISTINE is left behind.
@@ -30,7 +47,7 @@ root = fileparts(here);                     % ROME_merged
 addpath(here, root);
 dc   = fullfile(root, 'define_constants.m');            % the file the checks take custody of
 lock = fullfile(root, 'define_constants.PRISTINE');      % custody lock written by gate_all / check_guard / run_9dof_cases
-assert(~isfile(lock), 'test_suite:lock', 'define_constants.PRISTINE exists before the suite: restore it first (CLAUDE.md 20.4)');
+assert(~isfile(lock), 'test_suite:lock', 'define_constants.PRISTINE exists before the suite: an interrupted check left it; restore define_constants.m from it first (student procedure, appendix A3)');
 fid = fopen(dc, 'r');  b0 = fread(fid, Inf, '*uint8');  fclose(fid);     % bytes before
 md = java.security.MessageDigest.getInstance('SHA-256');
 h0 = lower(reshape(dec2hex(typecast(md.digest(b0), 'uint8'), 2).', 1, []));   % SHA-256 before, hex
@@ -38,7 +55,7 @@ fprintf('test_suite: %s\n  define_constants.m SHA-256 before: %s\n', root, h0);
 t0 = tic;
 
 steps = {'gate_all', 'check_guard', 'derivation_checks', 'verify_scenarios', ...
-         'verify_wheelmap', 'verify_eetraj', 'run_9dof_cases(''sim'')', 'test_v3_table3', 'test_run_length', 'test_ar3_fk', 'test_pacing', 'test_commanding_check', 'test_clearance', 'test_motive_reader'};   % step names, in run order
+         'verify_wheelmap', 'verify_eetraj', 'run_9dof_cases(''sim'')', 'test_v3_table3', 'test_run_length', 'test_ar3_fk', 'test_pacing', 'test_commanding_check', 'test_clearance', 'test_motive_reader', 'test_hw_nocam', 'test_arm_freeze', 'test_motive_model', 'test_motive_source', 'test_motive_emulator', 'test_run_mode', 'test_run_mode_core'};   % step names, in run order
 ok   = false(1, numel(steps));    % pass flag per step (a skipped step is not a pass)
 skip = false(1, numel(steps));    % true for a step not run because a step it depends on failed
 msg  = repmat({''}, 1, numel(steps));   % error or skip message per step (char, '' when none)
@@ -71,6 +88,13 @@ for k = 1:numel(steps)
             case 12, test_commanding_check();
             case 13, test_clearance();
             case 14, test_motive_reader();
+            case 15, test_hw_nocam();
+            case 16, test_arm_freeze();
+            case 17, test_motive_model();
+            case 18, test_motive_source();
+            case 19, test_motive_emulator();
+            case 20, test_run_mode();
+            case 21, test_run_mode_core();
         end
         ok(k) = true;
     catch e

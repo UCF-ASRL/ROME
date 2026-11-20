@@ -5,7 +5,8 @@ function [pose7, ok, why] = natnet_parse_rigidbody(bytes, rbID, layout)
 %             only the bytes actually received (MotiveData.receiveBytes truncates to getLength).
 %     rbID    Motive Streaming ID of the rigid body expected at layout.rbIdOffset (integer, -).
 %     layout  struct of 1-based byte indices: msgIdOffset (uint16 message ID), rbIdOffset (int32
-%             rigid-body ID), poseOffset (7 float32: x y z qx qy qz qw). Omitted or empty: the
+%             rigid-body ID), poseOffset (7 float32: x y z qx qy qz qw), optional trackedOffset (the
+%             int16 'params' of the same body; bit 0x01 = tracked). Omitted or empty: the
 %             offsets MotiveData.m has always used, msgId at 1, ID at 37-40, pose at 41-68.
 %     pose7   7x1 double [x y z qx qy qz qw], RAW: Motive units (metres unless Motive's length
 %             unit was changed; the lab's setting is NOT VERIFIED), no origin subtraction, no Euler
@@ -14,7 +15,15 @@ function [pose7, ok, why] = natnet_parse_rigidbody(bytes, rbID, layout)
 %     why     '' when ok, else the first check that failed (char).
 %   Checks, in order: host little-endian; bytes is uint8; packet long enough for the layout;
 %   message ID == 7 (NAT_FRAMEOFDATA); rigid-body ID == rbID; all 7 values finite;
-%   |norm([qx qy qz qw]) - 1| <= 1e-3.
+%   |norm([qx qy qz qw]) - 1| <= 1e-3; and, ONLY if layout has trackedOffset, params bit 0x01 set
+%   (why 'not tracked'). Without trackedOffset the check is off and the parser behaves as before.
+%   trackedOffset source: PacketClient.cpp 3.1.0 L694-719: after the ID and the 7 pose floats come the
+%   mean marker error (float32, L707-711) then params (short, L715-719; 'bTrackingValid = params & 0x01',
+%   NatNet >= 2.6); PacketClient.cpp 3.1.0 is silent on any per-body marker block. With the pose at
+%   41-68 that puts params at 1-based bytes 73-74 (trackedOffset = poseOffset + 32), but ONLY for
+%   NatNet >= 3.0 (or version 0 = unknown). For major < 3 a per-body marker block (4 + 20 n bytes,
+%   n = markers of the body) comes before the mean error: NatNetClient.py L107-131 (same mirror
+%   commit), so params then moves by 4 + 20 n. The lab's NatNet version is NOT VERIFIED (PART_C C9.1, C9R).
 %   Layout source: docs/verification/NATNET_PACKET_LAYOUT.md (OptiTrack NatNet SDK 3.1.0
 %   PacketClient.cpp Unpack, via a third-party mirror). With a NatNet 3.x-4.0 stream, x of the first
 %   rigid body is at byte 25 + S + 12 nO (S = marker-set record bytes, nO = unlabeled markers), so the
@@ -44,6 +53,7 @@ if ~isa(bytes, 'uint8')
     return
 end
 bytes = bytes(:);                           % datagram as a column (uint8)
+useTracked = isfield(layout, 'trackedOffset') && ~isempty(layout.trackedOffset);   % tracked-flag check enabled (logical)
 need = max([layout.msgIdOffset + 1, layout.rbIdOffset + 3, layout.poseOffset + 27]);   % last byte the layout reads (1-based index)
 if numel(bytes) < need
     why = sprintf('short packet: %d bytes, layout needs %d', numel(bytes), need);
@@ -69,6 +79,17 @@ qn = norm(p(4:7));                          % quaternion norm (-)
 if abs(qn - 1) > qTol
     why = sprintf('quaternion norm %.6g, outside 1 +/- %g', qn, qTol);
     return
+end
+if useTracked
+    if numel(bytes) < layout.trackedOffset + 1
+        why = sprintf('short packet: %d bytes, tracked flag needs %d', numel(bytes), layout.trackedOffset + 1);
+        return
+    end
+    params = typecast(bytes(layout.trackedOffset + (0:1)), 'uint16');   % NatNet per-body params word (-), bit 0x01 = tracked
+    if bitand(params, uint16(1)) == 0
+        why = sprintf('not tracked: params 0x%04X at bytes %d-%d has bit 0x01 clear', params, layout.trackedOffset, layout.trackedOffset + 1);
+        return
+    end
 end
 pose7 = p;
 ok = true;

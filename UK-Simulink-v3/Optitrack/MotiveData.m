@@ -28,9 +28,9 @@ classdef MotiveData < matlab.System
     % warning MotiveData:dropout is raised on the first rejected frame of a
     % run of them. Before the first valid frame every pose output is NaN.
     %
-    % Outputs. 1-6 are the outputs the model is wired to today (Enabled
-    % Subsystem SID 100: Mux of 1, 2 and -6), kept unchanged in meaning
-    % until Plan 2 Task 2 rewires the model:
+    % Outputs. 1-6 are the legacy outputs, kept unchanged in meaning; since
+    % F5b (19 Nov 2026) they drive only the 'Motive Data1' scope. The control
+    % path uses output 7 (PoseSource switch -> MotiveFloor, F5b/F7):
     %   1 x_pos, 2 y_pos  position minus the first valid frame's (Motive units)
     %   3 z_pos           raw position z (Motive units)
     %   4-6 x/y/z_rot     Euler XYZ of the quaternion (rad), quat2eul
@@ -53,8 +53,11 @@ classdef MotiveData < matlab.System
     properties (Nontunable, Access = protected)
         % 1-based byte indices in the datagram (header included) of the uint16
         % message ID, the int32 rigid-body ID and the 7 float32 pose values.
-        % Defaults = the offsets this file always used (pose at 41).
-        Layout = struct('msgIdOffset', 1, 'rbIdOffset', 37, 'poseOffset', 41);
+        % Defaults = the offsets this file always used (pose at 41), plus the int16 params
+        % word at 73-74 (bit 0x01 = tracked; PacketClient.cpp 3.1.0 L715-719). 73-74 holds only for NatNet >= 3.0
+        % or version 0; for major < 3 a per-body marker block (4 + 20 n bytes) precedes the mean error
+        % (NatNetClient.py L107-131, not PacketClient.cpp). Lab version NOT VERIFIED (PART_C C9R item 7).
+        Layout = struct('msgIdOffset', 1, 'rbIdOffset', 37, 'poseOffset', 41, 'trackedOffset', 73);
     end
 
     properties (SetAccess = private, GetAccess = protected)

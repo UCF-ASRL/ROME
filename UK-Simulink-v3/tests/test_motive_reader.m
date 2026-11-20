@@ -26,6 +26,13 @@ function test_motive_reader()
 %          step 2 x = y = 0 exactly (origin = first valid frame), pose7 = pose 1, valid 1,
 %          nDropped 0; step 3 the parser-rejected frame: valid 0, nDropped 1, pose7 held at
 %          pose 1, warned with the parser's reason ('rigid-body ID'); step 4 pose 2, valid 1.
+%     vii  tracked flag (params int16 at bytes 73-74, bit 0x01; PacketClient.cpp L715-719): with
+%          trackedOffset 73 a tracked packet is accepted, a valid-pose packet with bit clear is
+%          rejected with 'not tracked' (pose NaN); without trackedOffset the same packet is accepted
+%          (old behaviour); through MotiveDataFake an untracked frame is held (valid 0, nDropped 1,
+%          pose held, warning text 'not tracked'); params 0x0002 rejected, 0x0003 accepted; a 72-byte
+%          packet with trackedOffset on is rejected ('needs 74').
+%          vii make-it-fail 2: trackedOffset removed from MotiveData's default Layout must make md_held FAIL.
 %   Make-it-fail (run on scratch copies, not this file; drivers in ROME_merged/tools/):
 %     poseOffset 41 -> 45 in the parser layout below must make (i) FAIL (p2t1_make_mif.py);
 %     MotiveData's held pose initialised to zeros instead of NaN must make (vi) FAIL
@@ -36,7 +43,7 @@ here = fileparts(mfilename('fullpath'));    % ROME_merged/tests
 root = fileparts(here);                     % ROME_merged
 addpath(here, fullfile(root, 'Optitrack'));
 assert(strcmp(fileparts(which('MotiveData')), fullfile(root, 'Optitrack')), 'test_motive_reader:path', ...
-       'MotiveData resolves to %s, not ROME_merged/Optitrack', which('MotiveData'));
+       'MotiveData resolves to %s, not <model folder>/Optitrack', which('MotiveData'));
 [~, ~, endian] = computer;                  % host byte order ('L' little-endian, 'B' big-endian)
 assert(endian == 'L', 'test_motive_reader:endian', 'host is big-endian: typecast-based packets would be byte-swapped');
 fails = {};                                 % one message per failed check (cell of char)
@@ -73,7 +80,7 @@ pk2 = build(7, rbID, p2);                   % valid packet, pose 2
 c0 = isa(pk1, 'uint8') && iscolumn(pk1) && numel(pk1) == 4 + nData ...   % verdict of check 0 (logical)
      && isequal(pk1(1:2), le16(7)) && isequal(pk1(37:40), le32i(rbID)) && isequal(pk1(41:68), f32(p1));
 fprintf('0    builder: %d bytes, msgId@1-2, ID@37-40, pose@41-68 -> %s\n', numel(pk1), mat2str(c0));
-if ~c0, fails{end+1} = '0: the packet builder does not match NATNET_PACKET_LAYOUT.md'; end
+if ~c0, fails{end+1} = '0: the packet builder does not match the NatNet layout (msgId@1-2, ID@37-40, pose@41-68)'; end
 
 %% i  valid packet
 [p, ok, why] = natnet_parse_rigidbody(pk1, rbID, lay);   % p: 7x1 pose (Motive units / -) or NaN; ok: logical; why: char
@@ -188,8 +195,46 @@ for f = 1:numel(fn6)
     if ~cvi.(fn6{f}), fails{end+1} = sprintf('vi %s failed', fn6{f}); end %#ok<AGROW>
 end
 
+%% vii  tracked flag: packet params word at bytes 73-74 (NATNET_PACKET_LAYOUT.md section 3 rows 'mean marker error', 'params')
+layT = struct('msgIdOffset', 1, 'rbIdOffset', 37, 'poseOffset', 41, 'trackedOffset', 73);   % layout with the tracked check on
+pkU = pk1;                                  % valid pose, params = 0 (untracked): bytes 73-74 cleared (uint8 column)
+pkU(73:74) = [0; 0];
+assert(isequal(pk1(73:74), le16(1)) && isequal(pkU(1:72), pk1(1:72)), 'test_motive_reader:vii', 'tracked-flag bytes are not at 73-74');
+[pT, okT, whyT] = natnet_parse_rigidbody(pk1, rbID, layT);   % tracked packet
+[pU, okU, whyU] = natnet_parse_rigidbody(pkU, rbID, layT);   % untracked packet
+[pO, okO, ~]    = natnet_parse_rigidbody(pkU, rbID, lay);    % untracked packet, layout without trackedOffset (check off)
+pkU2 = pk1; pkU2(73:74) = typecast(uint16(2), 'uint8').';   % params 0x0002: bit 0 clear, other bit set (uint8 column)
+pkT3 = pk1; pkT3(73:74) = typecast(uint16(3), 'uint8').';   % params 0x0003: bit 0 set, other bit set
+[~, okU2, whyU2] = natnet_parse_rigidbody(pkU2, rbID, layT);   % must be rejected
+[~, okT3, ~]     = natnet_parse_rigidbody(pkT3, rbID, layT);   % must be accepted
+[~, okS, whyS]   = natnet_parse_rigidbody(pk1(1:72), rbID, layT);   % 72 bytes, tracked flag out of range
+seq7 = {pk1, pkU, pk2};                     % tracked, untracked, tracked through MotiveData (default Layout has trackedOffset)
+md7 = MotiveDataFake(seq7, 'RigidBodyID', rbID);   % MotiveData under test, network seam replaced
+P7 = zeros(7, 3); V7 = zeros(1, 3); D7 = zeros(1, 3); wm7 = cell(1, 3);   % pose7, valid, nDropped, warning text per step
+ws = warning('on', 'MotiveData:dropout');
+for k = 1:3
+    lastwarn('');
+    [~, ~, ~, ~, ~, ~, P7(:,k), V7(k), D7(k)] = md7(1);
+    wm7{k} = lastwarn;
+end
+warning(ws);
+release(md7);
+cvii = struct( ...                          % verdict of each (vii) sub-check (struct of logical)
+    'tracked_ok',     okT && isempty(whyT) && isequal(pT, e1), ...
+    'untracked_rej',  ~okU && all(isnan(pU)) && contains(whyU, 'not tracked'), ...
+    'off_without_offset', okO, ...
+    'params_0x0002_rej', ~okU2 && contains(whyU2, 'not tracked'), ...
+    'params_0x0003_ok',  okT3, ...
+    'short_needs_74',    ~okS && contains(whyS, 'needs 74'), ...
+    'md_held',        isequal(V7, [1 0 1]) && isequal(D7, [0 1 0]) && isequal(P7(:,2), e1) && isequal(P7(:,3), e2) && contains(wm7{2}, 'not tracked'));
+fn7 = fieldnames(cvii);                     % names of the (vii) sub-checks
+for f = 1:numel(fn7)
+    fprintf('vii  %-18s -> %s\n', fn7{f}, mat2str(cvii.(fn7{f})));
+    if ~cvii.(fn7{f}), fails{end+1} = sprintf('vii %s failed (why ''%s'')', fn7{f}, whyU); end %#ok<AGROW>
+end
+
 if ~isempty(fails)
     error('test_motive_reader:fail', 'test_motive_reader FAILED (%d):\n  %s', numel(fails), strjoin(fails, '\n  '));
 end
-fprintf('test_motive_reader PASS: checks 0, i, ii, iii, iv (6 cases), v (%d sub-checks), vi (%d sub-checks)\n', numel(fn), numel(fn6));
+fprintf('test_motive_reader PASS: checks 0, i, ii, iii, iv (6 cases), v (%d sub-checks), vi (%d sub-checks), vii (%d sub-checks)\n', numel(fn), numel(fn6), numel(fn7));
 end

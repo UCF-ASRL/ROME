@@ -32,9 +32,11 @@ mdl = 'ROME_9DOF';
 
 if nargin < 1 || isempty(out)
     evalin('base', sprintf('run(''%s'');', fullfile(here,'define_constants.m')));
-    assignin('base','EnableHardware',0);
+    % F12: run mode 1 only, asserted (an assignin of EnableHardware would be overwritten by the PostLoadFcn)
+    assert_sim_mode('plot_9dof', 'base');
     if bdIsLoaded(mdl), close_system(mdl,0); end
     load_system(fullfile(here,[mdl '.slx']));
+    try, assert_sim_mode('plot_9dof', 'base'); catch em_, close_system(mdl,0); rethrow(em_); end   % after the PostLoadFcn
     set_param(mdl,'StopFcn','');            % plotting is called from here instead
     out = sim(mdl,'SimulationMode','normal','ReturnWorkspaceOutputs','on');
     close_system(mdl,0);

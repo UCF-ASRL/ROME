@@ -54,12 +54,13 @@ for f = {'check_9dof.m', 'run_9dof_cases.m'}
 end
 
 %% custody of define_constants.m
-assert(~isfile(lock), 'test_run_length:lock', 'define_constants.PRISTINE exists: restore it first (CLAUDE.md 20.4)');
+assert(~isfile(lock), 'test_run_length:lock', 'define_constants.PRISTINE exists: an interrupted check left it; restore define_constants.m from it first (student procedure, appendix A3)');
 orig = fileread(dcf);                       % unmodified text
 copyfile(dcf, lock);
 restore = onCleanup(@() cellfun(@(c) c(), {@() copyfile(lock, dcf, 'f'), @() delete(lock)})); %#ok<NASGU>
-setsc = @(sc) regexprep(regexprep(orig, 'scenario = \d+;', sprintf('scenario = %d;', sc), 'once'), ...
-                        'EnableHardware = \d;', 'EnableHardware = 0;', 'once');   % define_constants text with the scenario set and EnableHardware = 0 ALWAYS (char)
+nScn = numel(regexp(orig, '^scenario = \d+;', 'start', 'lineanchors'));   % user-block scenario lines (count), must be 1
+assert(nScn == 1, 'test_run_length:dc', 'define_constants.m: %d lines ''scenario = <n>;'' (expected 1)', nScn);
+setsc = @(sc) dc_set_mode(regexprep(orig, '^scenario = \d+;', sprintf('scenario = %d;', sc), 'once', 'lineanchors'), 1);   % define_constants text with the scenario set and run_mode = 1 (EnableHardware 0) ALWAYS; F12: count-asserted, never a silent no-op (char)
 
 %% B  no model loaded
 if bdIsLoaded(mdl), close_system(mdl, 0); end
@@ -156,10 +157,10 @@ for hw = [1 0]
     if ~strcmp(pac, want), fails{end+1} = sprintf('D: EnableHardware = %d gave EnablePacing ''%s'', expected ''%s''', hw, pac, want); end %#ok<AGROW>
     close_system(mdl, 0);
 end
-tokD = regexp(fileread(dcf), 'EnableHardware = (\d);', 'tokens', 'once');   % the file's flag after D (cell of char)
-if isempty(tokD), ftxt = '(no flag line found)'; else, ftxt = tokD{1}; end   % printable flag (char)
-fprintf('D  define_constants.m on disk after D: EnableHardware = %s\n', ftxt);
-if ~strcmp(ftxt, '0'), fails{end+1} = 'D: define_constants.m on disk is not at EnableHardware = 0 after D'; end
+tokD = regexp(fileread(dcf), '^run_mode = (\d+);', 'tokens', 'lineanchors');   % the file's run_mode after D (cell)
+if numel(tokD) ~= 1, ftxt = sprintf('(%d run_mode lines)', numel(tokD)); else, ftxt = tokD{1}{1}; end   % printable mode (char)
+fprintf('D  define_constants.m on disk after D: run_mode = %s\n', ftxt);
+if ~strcmp(ftxt, '1'), fails{end+1} = 'D: define_constants.m on disk is not at run_mode = 1 (EnableHardware = 0) after D'; end
 
 if ~isempty(fails)
     error('test_run_length:fail', '%d assertion(s) failed:\n  %s', numel(fails), strjoin(fails, sprintf('\n  ')));

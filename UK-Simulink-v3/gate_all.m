@@ -1,6 +1,7 @@
 function gate_all()
 %GATE_ALL  Run the acceptance gate on every case study, in the model.
 here = fileparts(mfilename('fullpath')); cd(here); addpath(here);
+assert_sim_mode('gate_all', 'file', fullfile(here, 'define_constants.m'));   % F12: refused once here, not once per scenario
 orig = claim_constants();                  % see the function, foot of file
 restore = onCleanup(@() release_constants(orig));
 failed = {};

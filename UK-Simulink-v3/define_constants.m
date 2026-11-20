@@ -4,9 +4,15 @@
 
 scenario = 1;          % 1 ellipse | 2 V-bar | 3 R-bar | 4 NMC | 5 circle
 
-EnableHardware = 0;    % 0 simulate only. 1 commands the real robot.
-EnableMotive   = 0;    % 0 closes the loop on the model's own state.
-                       % 1 closes it on the cameras. THIS IS THE LAB MODE.
+run_mode = 1;          % THE RUN MODE, 1 to 4 (the author's four modes, 19 Nov 2026):
+                       %   1 simulation only (end-effector dynamics sim, pose data from sim)
+                       %   2 ground vehicle moving, frozen arm, camera off (fake camera)
+                       %   3 ground vehicle moving, moving arm, camera off (fake camera)
+                       %   4 ground vehicle moving, moving arm, camera on (OptiTrack; refused until motive_cal is measured)
+                       % EnableHardware, EnableMotive, motive_source and arm_freeze are DERIVED from it by
+                       % run_mode_table.m (below "Below here is the formulation"); they are not typed here.
+                       % Change it here and re-run define_constants, or type rome_mode(n), or press a Mode button
+                       % on the model's canvas (both re-run this file). Every run of this file prints the mode.
 
 % HOW THE RUN IS MEANT TO WORK
 % Four cameras watch a rectangular area. The robot is placed anywhere inside
@@ -21,8 +27,24 @@ EnableMotive   = 0;    % 0 closes the loop on the model's own state.
 % t = 0, screened so the solve is well conditioned there. That is what the
 % five case studies are verified against.
 %
-% With EnableMotive = 1 this is ignored: the cameras win.
+% With the real cameras (EnableMotive = 1, 'optitrack') this is ignored: the cameras win.
 base_override = [NaN; NaN; NaN];        % [x (m); y (m); yaw (deg)]
+
+% CAMERA FRAME (EnableMotive = 1; focus plan F5, 19 Nov 2026). The cameras report the robot's rigid body in
+% Motive's own frame. motive_cal turns that into the floor frame the model uses (paper LVLH: x radial,
+% y in-track, z up):   p_floor = motive_cal.scale * motive_cal.R * p_motive + motive_cal.t
+% and the heading is the rigid body's x axis projected on the floor, from floor +x (Optitrack/motive_to_floor.m).
+% The base pose the controller then receives is ABSOLUTE: where the robot actually is on the floor.
+% THE VALUES BELOW ARE NOT MEASURED. Identity, zero and 1 are placeholders until the lab frame calibration
+% (Plan 3 Part C, lab/fit_motive_cal.m); only then is measured set to true. While measured is false, a run with
+% EnableHardware = 1, EnableMotive = 1 and motive_source = 'optitrack' is refused (motive_cal_check.m), because
+% through an unmeasured transform the controller would believe the robot is wherever Motive's origin and axes put
+% it. motive_source = 'emulator' needs no calibration: its pose goes out and back through the same transform.
+motive_cal = struct( ...
+    'R',        eye(3), ...       % 3x3 rotation, Motive frame -> floor frame (-). UNMEASURED placeholder
+    't',        zeros(3, 1), ...  % 3x1 floor-frame position of the Motive origin (m). UNMEASURED placeholder
+    'scale',    1, ...            % metres per Motive unit (m/unit). UNMEASURED placeholder
+    'measured', false);           % true only once the Part C values are entered above (flag)
 
 % SPEED AND SIZE. These apply to EVERY scenario, on top of whatever that
 % scenario was designed around, so one number slows the whole set down.
@@ -128,14 +150,14 @@ arm_fw_other  = [ 160    0    1  165  -90 -170];  % otherLimits[] (non-switch si
 % The base still does everything the model asks, so comms, wheel map,
 % cameras and the guard get exercised; END-EFFECTOR TRACKING IS NOT
 % MEANINGFUL with this on, because the model believes the arm is moving.
-% Set to 0 only after the Teensy is flashed with the fix and jog_joint
+% The freeze is run_mode 2 (arm_freeze = 1, derived below); use run_mode 3 or 4
+% (arm moving) only after the Teensy is flashed with the fix and jog_joint
 % shows every joint following its command.
-% WARNING: ON THE ROBOT THIS IS NOT HONOURED YET. ROMECommand.m L54-57
-% ("FORCE ARM FREEZE OFF") sets arm_freeze = 0 at every hardware setup, so
-% with EnableHardware = 1 the arm moves whatever is written here. The freeze
-% is to be applied upstream in the model, Plan 2 Task 5 (author decision
-% 19 Nov 2026: ROMECommand.m stays Keanu's; freeze upstream).
-arm_freeze = 1;        % 1 hold the arm at arm_freeze_deg | 0 arm follows the model (flag); see WARNING
+% WARNING: ROMECommand.m L54-57 (Keanu's, kept as is, author 19 Nov 2026) sets
+% arm_freeze = 0 in the workspace at every run start. So the model reads
+% arm_freeze_user, copied from the derived arm_freeze at the END of this file: its switch
+% ArmFreezeSwitch sends q0_9dof(4:9) to ROMECommand while it is 1. Re-run
+% define_constants after changing run_mode; the Run banner says ARM FROZEN / ARM WILL MOVE.
 arm_fw_margin_deg = 2.0;    % cap stays this far inside BOTH ends of every
                             % joint, so a calibration off by this much still
                             % never reaches a switch. -90..90 becomes -88..88.
@@ -148,7 +170,17 @@ clearance_margin = 0.05; % m. check_9dof fails a run whose arm link points come 
 %% ========================================================================
 %  Below here is the formulation. Leave it alone.
 %  ========================================================================
-
+arm_freeze_user = NaN;  % arm freeze flag the model reads (flag): NaN until the LAST line of this file sets it, so a run after a partial define_constants is refused (arm_freeze_banner)
+% RUN MODE (focus plan F12, 19 Nov 2026). The four run flags are DERIVED from run_mode (user block) by
+% run_mode_table.m, the only place the mapping lives. A run_mode other than 1-4 stops this file here
+% (run_mode_table:bad, naming the four modes) with arm_freeze_user still NaN, so the model refuses to run too.
+run_mode_cfg   = run_mode_table(run_mode);        % the mode's flags and banner (struct)
+run_mode_test_override = {};                      % TEST HOOK (cell of flag names): empty here; only tests/dc_set_mode lines in temp copies add to it (arm_freeze_banner then lets those flags differ from the mode)
+EnableHardware = run_mode_cfg.EnableHardware;     % 0 simulate only | 1 command the real robot (flag)
+EnableMotive   = run_mode_cfg.EnableMotive;       % 1 the base pose reaches the controller through the camera pipeline (flag)
+motive_source  = run_mode_cfg.motive_source;      % 'emulator' fake camera | 'optitrack' real cameras (char)
+arm_freeze     = run_mode_cfg.arm_freeze;         % 1 joint command held at q0_9dof(4:9) | 0 the controller's command (flag)
+fprintf('%s\n', run_mode_cfg.banner);             % one line naming the mode, at every run of this file (model load included)
 % Define constants used throughout the model
 % This file is run once automatically when the project is opened
 % Run this file again after making any changes to update the workspace
@@ -279,8 +311,28 @@ end
 % lives in apply_pacing.m, which the model also calls from its InitFcn at every
 % run start. Set here only when the model is loaded, so this file still runs
 % with no model open.
-if bdIsLoaded('ROME_9DOF')
-    apply_pacing('ROME_9DOF');
+% CAMERA SOURCE (focus plan F7). motive_source must be 'emulator' or 'optitrack'
+% (motive_source_check.m); anything else stops this file here. The model's
+% Constant blocks PoseSelect and MotiveReaderEnable call the same function at
+% every compile.
+% CAMERA CALIBRATION REFUSAL (focus plan F5b, narrowed by F7). EnableHardware = 1
+% with EnableMotive = 1 and motive_source = 'optitrack' stops this file here, with
+% the reason, while motive_cal.measured is false (motive_cal_check.m; apply_pacing
+% calls it again at every run start). Stopping here leaves arm_freeze_user = NaN,
+% so the model refuses to run as well. This file passes its OWN values: tools run
+% it inside their function workspace, where the base may be empty or stale.
+motive_source_check(motive_source);
+motive_cal_check(EnableHardware, EnableMotive, motive_source, motive_cal);
+% EMULATOR NOISE (focus plan F7; simulation only). 1 adds the SensorModel camera
+% noise (mocap_sigma, the same MocapNoise draws) to the emulated pose, so mode 1
+% (EnableMotive = 1, 'emulator') reproduces the paper's noisy runs (Table 3)
+% to round-off (tests/test_motive_emulator.m (ii)). It only acts while
+% sensor_model ~= 0, which a hardware run forces to 0 (above) and refuses
+% otherwise (apply_pacing): modes 2 and 3 on the robot never see it.
+motive_emulate_noise = 1;  % 1 SensorModel noise on the emulated camera pose (sim only) | 0 noise-free (flag)
+if bdIsLoaded('ROME_9DOF')   % this file's OWN values, not the base workspace (F7 fix round 1, I1)
+    apply_pacing('ROME_9DOF', struct('EnableHardware', EnableHardware, 'EnableMotive', EnableMotive, ...
+        'sensor_model', sensor_model, 'motive_source', motive_source, 'motive_cal', motive_cal));
 end
 
 % Distance Calculations (Projected onto the floor)
@@ -296,7 +348,7 @@ max_dist_projected = max_dist_3d;
 [q0_9dof, qd0_9dof] = scenario_seeds(scenario, elements, mu, ...
                                      time_scale, dist_scale, z_work, arm_home, dt_9dof, tool_tilt_deg);
 % The parked start posture in firmware degrees: what calibrateROMEArm sends,
-% and what ROMECommand keeps sending while arm_freeze = 1.
+% and what ROMECommand sends while arm_freeze_user = 1 (ArmFreezeSwitch, model).
 arm_freeze_deg = arm_clamp(arm_sign(:).' .* rad2deg(q0_9dof(4:9)).' + arm_offset_deg(:).', ...
                            arm_fw_switch, arm_fw_other, arm_fw_margin_deg);
 
@@ -317,7 +369,7 @@ qd0_9dof = zeros(9,1);
 % Re-solving matters: keeping the seed's arm angles under a different base pose
 % puts the end effector somewhere else entirely, and ic_factors showed a 0.44 m
 % offset is enough to diverge.
-if ~any(isnan(base_override)) && ~EnableMotive
+if ~any(isnan(base_override)) && ~(EnableMotive && strcmp(motive_source, 'optitrack'))   % F7: the fake camera honours a typed placement
     q0_9dof(1) = base_override(1);
     q0_9dof(2) = base_override(2);
     q0_9dof(3) = deg2rad(base_override(3));
@@ -375,11 +427,11 @@ fprintf('  Base    x %+7.3f m   y %+7.3f m   yaw %+7.2f deg\n', ...
         q0_9dof(1), q0_9dof(2), rad2deg(q0_9dof(3)));
 fprintf('  Arm     %s deg\n', num2str(rad2deg(q0_9dof(4:9)).', '%+8.2f'));
 fprintf('  Rates   all zero. Let it sit still before you start.\n');
-fprintf('\n  Order: place base -> calibrateROMEArm -> EnableHardware = 1.\n');
+fprintf('\n  Order: set run_mode FIRST (rome_mode(n)) -> place base -> calibrateROMEArm -> Run.\n');
 fprintf('  calibrateROMEArm parks the arm at the angles above (mapped to\n');
 fprintf('  firmware degrees). arm_sign / arm_offset_deg are derived from\n');
 fprintf('  the AR3 files, not measured: run the jog test, GETTING_STARTED.md\n');
-fprintf('  step 3, before EnableHardware = 1. Joint commands are capped to\n');
+fprintf('  step 3, before the first robot run. Joint commands are capped to\n');
 fprintf('  the firmware ranges, wheels to max_rpm.\n');
 fprintf('==========================================\n\n');
 
@@ -390,3 +442,13 @@ end
 if T_scaled > 30
     fprintf('Note: Orbit duration is currently %.1fs (Target: <30s).\n', T_scaled);
 end
+dc_sha_at_run = dc_file_sha([mfilename('fullpath') '.m']);  % SHA-256 (hex char) of this file as run; arm_freeze_banner refuses a Run when define_constants.m changed since (stale workspace)
+% ARM FREEZE, the value the model uses (Plan 2 Task 5 / focus plan F1, 19 Nov 2026).
+% ROMECommand.m L56 writes arm_freeze = 0 into the base workspace when a run
+% starts (every run, also EnableHardware = 0). The model's Constant is read at
+% compile, before that write, so a FIRST run would still see 1, but every later
+% Run of the same session would see 0 and move the arm (measured:
+% docs/verification/2026-11-19_f1_eval_order_probe.log). Hence this copy, which
+% ROMECommand never writes. Read by ArmFreezeSwitch (tools/wire_arm_freeze.m)
+% and by the banner arm_freeze_banner.m (model InitFcn).
+arm_freeze_user = arm_freeze;   % student's arm_freeze, captured last (flag): 1 joint command held at q0_9dof(4:9), 0 controller's command

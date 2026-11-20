@@ -1,7 +1,8 @@
 function R = check_9dof()
 %CHECK_9DOF  Acceptance gate for ROME_9DOF.slx. Simulation only, no hardware.
 %
-%   Forces EnableHardware = 0 and EnableArm = 0, so nothing reaches a serial
+%   Asserts run_mode = 1 (EnableHardware = 0, fake camera) before and after
+%   load_system (assert_sim_mode:notsim) and forces EnableArm = 0, so nothing reaches a serial
 %   port. ERRORS on failure -- a check that prints FAIL and exits 0 gates
 %   nothing.
 %
@@ -47,9 +48,11 @@ cd(here); addpath(here, fullfile(here,'Ground Vehicle'), fullfile(here,'Optitrac
 mdl = 'ROME_9DOF';
 
 evalin('base', sprintf('run(''%s'');', fullfile(here,'define_constants.m')));
-assignin('base','EnableHardware',0);
-assignin('base','EnableMotive',0);
 assignin('base','EnableArm',0);
+% RUN MODE (focus plan F12). This simulates run mode 1 only. The flags come from run_mode in define_constants.m,
+% and load_system's PostLoadFcn re-runs define_constants, so an assignin of the flags would be overwritten: the mode is
+% ASSERTED instead (assert_sim_mode, shared by every runner), here and again after load_system.
+assert_sim_mode('check_9dof', 'base');
 
 fprintf('\n=======================================================\n');
 fprintf('  9-DOF VERIFICATION  -  simulation only, no hardware\n');
@@ -91,11 +94,14 @@ end
 
 if bdIsLoaded(mdl), close_system(mdl,0); end
 load_system(fullfile(here,[mdl '.slx']));
+try, assert_sim_mode('check_9dof', 'base'); catch em_, close_system(mdl,0); rethrow(em_); end   % after the PostLoadFcn
 set_param(mdl,'StopFcn','');
 % The model's StopTime is 'T_stop' (define_constants): the whole path, onset included.
 assert(strcmp(get_param(mdl,'StopTime'), 'T_stop'), 'check_9dof:stoptime', ...
        'model StopTime is ''%s'', expected ''T_stop''', get_param(mdl,'StopTime'));
 out = sim(mdl,'SimulationMode','normal','ReturnWorkspaceOutputs','on');
+fprintf('  run flags (read back after the sim): EnableMotive %g, motive_source %s, motive_emulate_noise %g, sensor_model %g\n', ...
+        evalin('base','EnableMotive'), evalin('base','motive_source'), evalin('base','motive_emulate_noise'), evalin('base','sensor_model'));
 close_system(mdl,0);
 
 % squeeze leaves an m x N array for an m x 1 signal logged over N steps.

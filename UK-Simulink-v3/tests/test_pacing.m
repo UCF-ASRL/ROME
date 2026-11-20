@@ -49,7 +49,7 @@ mdlcell = {mdl};                            % the model name as a cell, for the 
 cleanup = onCleanup(@() cellfun(@(c) c(), {@() cd(startdir), @() path(path0), ...
           @() cellfun(@(m) set_param(m, 'FastRestart', 'off'), mdlcell(bdIsLoaded(mdl))), ...
           @() cellfun(@(m) close_system(m, 0), mdlcell(bdIsLoaded(mdl))), @() rmdir(tmp, 's')})); %#ok<NASGU>
-addpath(tmp, fullfile(tmp, 'Ground Vehicle'), fullfile(tmp, 'Optitrack'));
+addpath(tmp, fullfile(tmp, 'Ground Vehicle'), fullfile(tmp, 'Optitrack'), here);   % here: tests/dc_set_mode.m
 cd(tmp);
 evalin('base', 'clear all; clear classes');
 fails = {};                                 % one message per failed assertion (cell of char)
@@ -85,6 +85,7 @@ for r = 1:size(runs, 1)
     end
     set_param(mdl, 'EnablePacing', preset);     % the state the model is in when the student presses Run
     assignin('base', 'EnableHardware', hwv);    % NOT through define_constants
+    assignin('base', 'run_mode_test_override', {'EnableHardware'});   % F12 fix round 1: set by hand, so arm_freeze_banner lets it differ from run_mode
     if hwv ~= 0, assignin('base', 'sensor_model', 0); end   % 0 exact state (flag): apply_pacing refuses a hardware run with SensorModel noise on (tested in d7)
     evalin('base', 'clear ukd_current');
     t0 = tic;
@@ -115,6 +116,8 @@ for r = 1:size(frruns, 1)
     if ~keep, set_param(mdl, 'InitFcn', ''); set_param(mdl, 'StartFcn', ''); end
     set_param(mdl, 'FastRestart', 'on');
     assignin('base', 'EnableHardware', 0);
+    assignin('base', 'EnableMotive', 0);        % F7 fix round 1: Fast Restart is refused whenever EnableMotive ~= 0 (now the default); this case tests the EnableHardware branch
+    assignin('base', 'run_mode_test_override', {'EnableHardware', 'EnableMotive'});   % F12 fix round 1: set by hand
     evalin('base', 'clear ukd_current');
     sim(mdl, 'StopTime', num2str(Tlong));       % run 1, simulation only
     assignin('base', 'EnableHardware', 1);      % NOT through define_constants
@@ -194,14 +197,15 @@ end
 % MAKE-IT-FAIL (Phase 2, makefail_campaign row tp_dc_force): define_constants.m override line
 % "    sensor_model = 0;  % forced" -> "    sensor_model = 1;  % forced"; d8 must then FAIL.
 dctxt = fileread(fullfile(tmp, 'define_constants.m'));   % the copy's define_constants text (char)
-nEH   = numel(strfind(dctxt, 'EnableHardware = 0;'));     % matches of the user-block flag line (count), must be 1
+dctxt1 = dc_set_mode(dctxt, 1);                          % F12: run_mode 1 (EnableHardware 0), count-asserted (char)
+nEH   = 1;                                               % the run_mode line was found once (dc_set_mode errors otherwise)
 evalin('base', 'clear all');
 load_system(fullfile(tmp, [mdl '.slx']));                 % PostLoadFcn = define_constants from the file (EnableHardware 0)
 set_param(mdl, 'StopFcn', '');
 set_param(mdl, 'EnablePacing', 'off');                    % the opposite of what EnableHardware = 1 must give
 printed = '';  err8 = '';                                 % define_constants output (char), error text (char)
 if nEH == 1
-    assignin('base', 'dc_text_hw1', strrep(dctxt, 'EnableHardware = 0;', 'EnableHardware = 1;'));   % in memory only
+    assignin('base', 'dc_text_hw1', dc_set_mode(dctxt1, 2));   % in memory only: run_mode 2 (EnableHardware 1, EM 1, emulator, arm_freeze 1 = the old defaults with EH 1)
     try
         printed = evalin('base', 'evalc(dc_text_hw1)');
     catch e
