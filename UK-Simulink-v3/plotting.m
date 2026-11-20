@@ -112,7 +112,7 @@ v_th_track = q_dot_track(3, :);
 % Calculate Errors
 err_x = x_pos_des - x_pos_track;
 err_y = y_pos_des - y_pos_track;
-err_th = rad2deg(th_des - th_track); 
+err_th = rad2deg(atan2(sin(th_des - th_track), cos(th_des - th_track)));   % wrapped to (-pi, pi] (F14d/F14a, author 19 Nov)
 err_vx = v_x_des - v_x_track;
 err_vy = v_y_des - v_y_track;
 err_vth = rad2deg(v_th_des - v_th_track);

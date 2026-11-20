@@ -2,7 +2,7 @@ function test_bench(mut)
 %TEST_BENCH  Offline tests of the Part F bench evaluators (Plan 3 Task 2).
 %   Tests lab/bench_joint_signs.m, lab/bench_wheel_order.m and lab/bench_parse_telemetry.m on SYNTHETIC logs.
 %   Pure functions only: no define_constants, no gate_all, no check_9dof, no test_suite, no model, no network.
-%   The current arm_sign / arm_offset_deg are read from the TEXT of ../define_constants.m (regexp on the two
+%   The current arm_sign / arm_offset_deg are read from the TEXT of ../lab_settings.m (F14a; regexp on the two
 %   assignment lines, the file is not executed), so the "current constants" of case a1 are the live ones.
 %   Cases
 %     p1  telemetry parser accepts exactly what ROMECommand.m L149-168 accepts: GV needs >= 9 fields, ARM >= 8,
@@ -32,7 +32,7 @@ if nargin < 1, mut = 0; end   % 0 = real test; k > 0 = mutation k (see MUT comme
 here = fileparts(mfilename('fullpath'));                 % tests folder
 root = fileparts(here);                                  % ROME_merged
 addpath(fullfile(root, 'lab'), fullfile(root, 'analysis'));
-K = read_constants(fullfile(root, 'define_constants.m')); % struct arm_sign, arm_offset_deg (1x6)
+K = read_constants(fullfile(root, 'lab_settings.m'));    % struct arm_sign, arm_offset_deg (1x6); lab_settings.m since F14a
 
 % ---------- p1 parser
 lines = ["ARM,1.0,2.0,3.0,4.0,5.0,6.0,READY"; ...         % valid ARM, READY
@@ -207,7 +207,7 @@ if ~(isscalar(cond) && cond), error('test_bench:fail', 'FAIL: %s', msg); end
 end
 
 function K = read_constants(file)
-% READ_CONSTANTS  arm_sign and arm_offset_deg from the TEXT of define_constants.m (not executed).
+% READ_CONSTANTS  arm_sign and arm_offset_deg from the TEXT of lab_settings.m (not executed; moved there from define_constants.m, F14a).
 txt = fileread(file);
 K.arm_sign = grab(txt, 'arm_sign');           % 1x6 +/-1
 K.arm_offset_deg = grab(txt, 'arm_offset_deg'); % 1x6 deg
@@ -215,7 +215,7 @@ end
 
 function v = grab(txt, name)
 tok = regexp(txt, ['(?m)^' name '\s*=\s*\[([^\]]*)\]'], 'tokens');
-if numel(tok) ~= 1, error('test_bench:parse', 'expected exactly one "%s = [...]" in define_constants.m, found %d', name, numel(tok)); end
+if numel(tok) ~= 1, error('test_bench:parse', 'expected exactly one "%s = [...]" in lab_settings.m, found %d', name, numel(tok)); end
 v = sscanf(tok{1}{1}, '%f').';
 if numel(v) ~= 6, error('test_bench:parse', '%s has %d numbers, expected 6', name, numel(v)); end
 end

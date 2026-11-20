@@ -1,7 +1,7 @@
 # Part F — Bench checklist (signed)
 
 Prepared 19 Nov 2026 (drafted by Claude for the author). **NOT EXECUTED.** Every blank is empty on purpose.
-Spec: `docs/2026-11-18-rome-sim-to-lab-plan.md` Part F steps 23-28. Plan: `docs/superpowers/plans/2026-11-19-plan3-lab-procedure.md` Task 2.
+Spec: `docs/2026-11-18-rome-sim-to-lab-plan.md` Part F steps 23-28. Plan: Plan 3, lab procedure (a review document, not in the lab repo), Task 2.
 After signing, save a copy under `docs/verification/` (spec step 28).
 
 Rule: a statement about hardware or code carries file and line, or document and printed page. Anything not found is **NOT VERIFIED**, with what would verify it.
@@ -138,7 +138,7 @@ write(c, "STOP_ALL" + newline, "char");   % then stop sending; print every ARM, 
 ---
 
 ## Item 24 — Joint sign and direction test
-**Tool:** `jog_joint(j, delta_deg)` (`jog_joint.m` L1), `j` = 1…6 as the firmware numbers them, `delta_deg` in **firmware degrees**. It reads the arm's `ARM,` line, sets `target(j) = reading + delta_deg`, caps it to the firmware range minus the 2° margin (L24-26; `arm_fw_margin_deg`, `define_constants.m` L130), sends `ROME,0,0,0,0,<six joint angles>` at 5 Hz for up to 15 s (L27-40) and prints the reading before and after (L41-42). Wheel speeds are zero, and the Mega is not started, so wheels do not move. `jogROMEArm()` (GUI, default step 5°, `jogROMEArm.m` L11, L27-29) is **not** used here: without a telemetry sync it sends all-zero targets (L95-97, L126).
+**Tool:** `jog_joint(j, delta_deg)` (`jog_joint.m` L1), `j` = 1…6 as the firmware numbers them, `delta_deg` in **firmware degrees**. It reads the arm's `ARM,` line, sets `target(j) = reading + delta_deg`, caps it to the firmware range minus the 2° margin (L24-26; `arm_fw_margin_deg`, `define_constants.m` L130), sends `ROME,0,0,0,0,<six joint angles>` at 5 Hz for up to 15 s (L27-40) and prints the reading before and after (L41-42). Wheel speeds are zero, and the Mega is not started, so wheels do not move. `jogROMEArm()` (GUI, default step 5°, `jogROMEArm.m` L16) is **not** used here. Since fixes5 (20 Nov) it sends every command through `jog_rome_send.m`: nothing is sent until the first `ARM,` telemetry line with six finite angles has been read (L29-32), the target starts from that reading (`jogROMEArm.m` L152-153), and each target is capped with `arm_clamp` to the same firmware ranges as `jog_joint` (L37).
 **Preconditions:** item 23 done; arm calibrated (READY: the Teensy accepts joint packets only then, TNSY L241); clear zone empty; hand on the cut-off; `jog_joint` does not send `STOP_ALL` when it ends (L74-76).
 
 **Model-side predictions (one-time, desk or bench PC; NOT RUN, UNTESTED snippet).** Firmware map in the code: `firmware = arm_sign .* model + arm_offset_deg`, `arm_sign = [1 -1 -1 1 1 1]`, `arm_offset_deg = [0 180 90 0 0 0]` (`define_constants.m` L102-103). Candidate physical maps: `romefw_to_arcs_deg(fw, 'rome_dirpin')` and `(…, 'arcs_caldir')` (`analysis/romefw_to_arcs_deg.m`; TRACKER Q-T5a). Per joint, the displacement of the flange for +5° firmware under each map, and under the model:
@@ -295,4 +295,4 @@ Anything marked NOT VERIFIED above that stayed NOT VERIFIED: ____
 
 I confirm the tests above were carried out as written, with the deviations listed.
 Name ____ Signature ____ Date (YYYY-MM-DD) ____
-The date goes into `lab_signoff.m` (Part F sign-off field, Plan 3 Task 4, not yet written); the signed copy goes to `docs/verification/`.
+The date goes into `signoff_partF` in `lab_settings.m` (the Part F sign-off date, 'yyyy-mm-dd'; '' = not signed); the signed copy goes to `docs/verification/`.

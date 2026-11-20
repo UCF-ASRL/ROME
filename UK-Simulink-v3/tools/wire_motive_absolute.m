@@ -53,7 +53,7 @@ Q0 = [SS '/q0'];  AD = [SS '/Add'];  M1 = [SS '/Mux1'];  G1 = [SS '/Multiply2'];
 RE = [mdl '/MotiveReaderEnable'];  MI = [mdl '/MotiveInit'];
 MT = [mdl '/MuxTracked'];  ST = [mdl '/StateSource'];  UK = [mdl '/UKDynamics'];  UM = [mdl '/UseMotive'];  C1 = [mdl '/Constant1'];
 reVal = 'double(EnableMotive ~= 0 && EnableHardware ~= 0)';   % reader enable expression (char)
-pacBan = 'apply_pacing(bdroot); arm_freeze_banner(bdroot)';   % InitFcn set by F1 (char), must stay
+pacBan = 'apply_pacing(bdroot); arm_freeze_banner(bdroot); prerun_check(bdroot)';   % InitFcn set by F1 (char), must stay + prerun_check (F2, tools/wire_prerun_check.m)
 sha = @(s) lower(reshape(dec2hex(typecast(java.security.MessageDigest.getInstance('SHA-256').digest(uint8(unicode2native(s, 'UTF-8'))), 'uint8'), 2).', 1, []));   % SHA-256 of a char (hex char)
 exists = @(b) getSimulinkBlockHandle(b) ~= -1;  % block present in the loaded model (logical)
 srcOf = @(b) get_param(b, 'PortConnectivity');   % port connectivity of a block (struct array)

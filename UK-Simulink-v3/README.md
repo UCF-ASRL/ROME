@@ -1,5 +1,5 @@
 This model folder: the paper's 9-DOF formulation (ROME_9DOF_Integration, final paper V3) merged with the lab's hardware files from ucf-asrl/ROME UK-Simulink-v3; the merge record is kept with the paper's review files, not in this repository.
-The step-by-step procedure for students (calibration, hardware runs) is docs/student_procedure/ROME_lab_procedure.pdf (source .tex beside it); do not use the hardware scripts without it.
+The step-by-step procedure for students (calibration, hardware runs) is docs/student_procedure/ROME_student_sheet.pdf, and for the TA docs/student_procedure/ROME_TA_manual.pdf (sources .tex beside them); do not use the hardware scripts without them. docs/student_procedure/ROME_lab_procedure.pdf (19 Nov) is superseded by these two.
 To check the folder, run in MATLAB R2026a from the tests folder of this model folder (UK-Simulink-v3/tests in the lab repository): `test_suite`
 
 ## Changes vs lab main

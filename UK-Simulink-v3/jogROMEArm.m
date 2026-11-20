@@ -6,6 +6,11 @@ function jogROMEArm()
     PORT = 3333;
 
     % Internal State
+    % Every arm command goes through jog_rome_send (hw audit row 24, fixes5): capped to the firmware ranges of
+    % define_constants (arm_clamp, as ROMECommand / jog_joint / calibrateROMEArm), and REFUSED until the first ARM
+    % telemetry line has been read (synced), so the zeros below are never sent (J2 = 0 is a firmware range end).
+    lim = jog_rome_send('limits');   % firmware ranges (struct fw_switch, fw_other, margin; deg)
+    synced = false;                  % true once an ARM telemetry line with 6 finite angles has been read
     targetAngles = zeros(1, 6);
     actualAngles = zeros(1, 6);
     stepSize = 5.0; % Default jog step in degrees
@@ -73,7 +78,6 @@ function jogROMEArm()
     % Sync with hardware to prevent snapping to zero
     lblStatus.Text = 'Syncing starting positions...';
     drawnow;
-    synced = false;
     t0 = tic;
     
     while toc(t0) < 3 && ~synced
@@ -81,7 +85,7 @@ function jogROMEArm()
             rawMsg = strtrim(readline(c));
             if startsWith(rawMsg, "ARM,")
                 parts = split(rawMsg, ",");
-                if numel(parts) >= 8
+                if numel(parts) >= 8 && all(isfinite(str2double(parts(2:7))))
                     vals = str2double(parts(2:7));
                     targetAngles = vals(:)';
                     actualAngles = vals(:)';
@@ -93,7 +97,7 @@ function jogROMEArm()
     end
 
     if ~synced
-        lblStatus.Text = 'WARNING: No telemetry sync! Arm may snap to 0.';
+        lblStatus.Text = 'No ARM telemetry: nothing is sent until the arm reports its angles.';
         lblStatus.FontColor = [0.8 0.4 0]; % Orange
     else
         lblStatus.Text = sprintf('Connected | Arm State: %s', armStateStr);
@@ -107,7 +111,9 @@ function jogROMEArm()
     end
 
     function jogJoint(idx, dir)
+        if ~synced, return; end      % no target before the arm's own reading
         targetAngles(idx) = targetAngles(idx) + (dir * stepSize);
+        targetAngles = arm_clamp(targetAngles, lim.fw_switch, lim.fw_other, lim.margin);   % show the capped target
         updateLabels();
     end
 
@@ -123,8 +129,13 @@ function jogROMEArm()
         
         % 10 Hz Command Transmission to satisfy Watchdog
         if toc(lastSendTime) > 0.1
-            msg = sprintf('ROME,0,0,0,0,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n', targetAngles);
-            write(c, msg, "char");
+            try
+                targetAngles = jog_rome_send(c, targetAngles, synced, lim);   % capped; refused before telemetry
+            catch ME
+                if ~strcmp(ME.identifier, 'jog_rome_send:notelemetry'), rethrow(ME); end
+                lblStatus.Text = 'No ARM telemetry: nothing sent. Calibrate the arm or call the TA.';
+                lblStatus.FontColor = 'red';
+            end
             lastSendTime = tic;
         end
 
@@ -138,6 +149,9 @@ function jogROMEArm()
                     actualAngles = str2double(parts(2:7))';
                     armStateStr = strtrim(parts{8});
                     updated = true;
+                    if ~synced && all(isfinite(actualAngles))   % first telemetry: start the target at the reading
+                        targetAngles = actualAngles;  synced = true;
+                    end
                 end
             end
         end

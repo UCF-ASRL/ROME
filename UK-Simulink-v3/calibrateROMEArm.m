@@ -17,13 +17,13 @@ TIMEOUT_SECONDS = 120;
 % here.6
 here = fileparts(mfilename('fullpath'));
 addpath(here, fullfile(here, 'Optitrack'));
-evalc('define_constants');
+evalc('define_constants');  addpath(fullfile(here, 'lab'));  arm_park_record('invalidate', fullfile(here, 'lab', 'arm_park_record.mat'));   % wire3 fix I5: any older park record is void from here (before CAL_ARM); only a successful calibration below writes a valid one
 homePosDeg = arm_sign(:) .* rad2deg(q0_9dof(4:9)) + arm_offset_deg(:);
 [homePosDeg, hit] = arm_clamp(homePosDeg, arm_fw_switch, arm_fw_other, arm_fw_margin_deg);
 homePosDeg = homePosDeg(:);
 if any(hit)
     error(['the start posture maps outside the firmware range on joint(s) %s: ' ...
-           'fw %s. Fix arm_home / arm_sign / arm_offset_deg in define_constants ' ...
+           'fw %s. Fix arm_home (define_constants.m) or arm_sign / arm_offset_deg (lab_settings.m, TA) ' ...
            'and re-run gate_all before calibrating.'], mat2str(find(hit)), ...
            mat2str(round(homePosDeg.', 1)));
 end
@@ -190,10 +190,10 @@ else
              '  the floor about 0.34 m in front of the base axis.\n']);
     if any(bad)
         fprintf(['  DO NOT run a robot mode (run_mode 2, 3 or 4). Joint(s) %s did not reach the target.\n' ...
-                 '  Run jog_joint(j, 10) on each of them and watch which way the arm goes.\n'], ...
+                 '  Stop here and call the TA (moving a joint is a TA action).\n'], ...
                 mat2str(find(bad)));
     else
-        fprintf('  If the arm does not look like that, run jog_joint(j, 10) joint by joint.\n');
+        fprintf('  If the arm does not look like that, stop and call the TA.\n');
     end
 end
 if statusReceived
@@ -202,7 +202,27 @@ else
     warning('READY status not confirmed by Teensy.');
 end
 
-fprintf('\nROME arm calibration successfully completed.\n\n');
+% The final line comes after the park record below: success only when the record was written (clarity audit A2).
+
+% PARK RECORD (focus plan F2/F11). prerun_check.m refuses every robot run (run_mode 2, 3, 4) unless the newest record
+% holds this start posture AND the settings SHA of define_constants.m + lab_settings.m as they are at the Run
+% (settings_sha.m, the hash define_constants stores as dc_sha_at_run). So any edit of either file after this point,
+% a Mode button included, needs a new calibration (author: "We need to recalibrate no matter what").
+% Written only when every encoder joint read at target; otherwise no record and robot runs stay refused.
+addpath(fullfile(here, 'lab'));  parkWritten = false;           % arm_park_record; parkWritten: true only once the record is written below
+parkFile = fullfile(here, 'lab', 'arm_park_record.mat');        % parked-posture history (char)
+if ~any(isnan(lastRead)) && ~any(bad)
+    rec = arm_park_record('write', homePosDeg.', parkFile, settings_sha(fullfile(here, 'define_constants.m')));  parkWritten = true;
+    fprintf('Park record written (entry %d): %s\n', rec.n, parkFile);
+else
+    fprintf('NO park record written (no telemetry, or a joint not at target): the old record was invalidated at the start, so robot runs stay refused.\n');
+end
+if parkWritten   % clarity audit A2: the success line only when the park record was written
+    fprintf('\nROME arm calibration successfully completed.\n\n');
+else
+    fprintf(['\nROME arm calibration FAILED: no park record was written, so robot runs (run_mode 2, 3, 4) stay refused.\n' ...
+             'Do not run a robot mode. Call the TA.\n\n']);
+end
 
 end
 

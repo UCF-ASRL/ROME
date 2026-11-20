@@ -33,8 +33,11 @@ function apply_pacing(mdl, vals)
 %         values to check, given by define_constants.m (its OWN values: tools run it in a function workspace,
 %         where the base may be empty or stale; F5b review I1, F7 fix round 1). Without it (InitFcn / StartFcn)
 %         everything is read from the BASE workspace, which is what the model compiles against.
+%   In the InitFcn / StartFcn form a refusal of a robot run first prints its RUN VERDICT FAIL line (run_refused.m,
+%   focus plan F14a), then is rethrown unchanged (same identifier and message).
 if nargin < 1, mdl = bdroot; end
 given = nargin >= 2 && isstruct(vals);            % values given by the caller, not read from the base (logical)
+try   % F14a: a refusal at a robot run's start prints its FAIL line (run_refused.m) before it is rethrown unchanged
 if given
     hw = vals.EnableHardware;                     % 0 simulate only, 1 command the real robot (flag)
 else
@@ -120,5 +123,9 @@ if live && given
     motive_cal_check(vals.EnableHardware, vals.EnableMotive, vals.motive_source, vals.motive_cal);
 elseif live
     motive_cal_check();
+end
+catch err
+    if ~given, run_refused(err); end               % InitFcn / StartFcn form only: the PASS/FAIL line of a refused robot run (F14a)
+    rethrow(err);
 end
 end

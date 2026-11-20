@@ -1,147 +1,46 @@
 %% ========================================================================
 %  EDIT THIS BLOCK. NOTHING ELSE IN THIS FILE NEEDS TOUCHING.
 %  ========================================================================
+%  Set the mode with rome_mode(n) (it rewrites run_mode below and re-runs this file).
+%  Lab constants (arm map, firmware ranges, wheel ceiling, camera calibration, sensor
+%  model, clearance margin) are in lab_settings.m, kept by the TA.
 
-scenario = 1;          % 1 ellipse | 2 V-bar | 3 R-bar | 4 NMC | 5 circle
+scenario = 1;          % case study: 1 ellipse | 2 V-bar | 3 R-bar | 4 NMC | 5 circle (-)
+run_mode = 1;          % 1 simulation only | 2 robot, arm frozen | 3 robot, arm moving | 4 robot + cameras (-)
+speed_factor = 1.0;    % fraction of the designed speed (-): 1.0 as designed, 0.5 half speed
+size_factor  = 0.50;   % fraction of the designed path size (-): 1.0 as designed, 0.5 half size
 
-run_mode = 1;          % THE RUN MODE, 1 to 4 (the author's four modes, 19 Nov 2026):
-                       %   1 simulation only (end-effector dynamics sim, pose data from sim)
-                       %   2 ground vehicle moving, frozen arm, camera off (fake camera)
-                       %   3 ground vehicle moving, moving arm, camera off (fake camera)
-                       %   4 ground vehicle moving, moving arm, camera on (OptiTrack; refused until motive_cal is measured)
-                       % EnableHardware, EnableMotive, motive_source and arm_freeze are DERIVED from it by
-                       % run_mode_table.m (below "Below here is the formulation"); they are not typed here.
-                       % Change it here and re-run define_constants, or type rome_mode(n), or press a Mode button
-                       % on the model's canvas (both re-run this file). Every run of this file prints the mode.
-
-% HOW THE RUN IS MEANT TO WORK
-% Four cameras watch a rectangular area. The robot is placed anywhere inside
-% it, the cameras report where it is, and the only thing commanded is the end
-% effector: the solve decides how base and arm share the job. That is the
-% whole point of the formulation, so in the lab EnableMotive = 1 and the base
-% pose is MEASURED, never typed.
-%
-% base_override below is the fallback for when the cameras are not running --
-% bench testing, or a dry run at a desk. Leave it NaN and the start pose is
-% computed: inverse kinematics puts the end effector on the reference at
-% t = 0, screened so the solve is well conditioned there. That is what the
-% five case studies are verified against.
-%
-% With the real cameras (EnableMotive = 1, 'optitrack') this is ignored: the cameras win.
-base_override = [NaN; NaN; NaN];        % [x (m); y (m); yaw (deg)]
-
-% CAMERA FRAME (EnableMotive = 1; focus plan F5, 19 Nov 2026). The cameras report the robot's rigid body in
-% Motive's own frame. motive_cal turns that into the floor frame the model uses (paper LVLH: x radial,
-% y in-track, z up):   p_floor = motive_cal.scale * motive_cal.R * p_motive + motive_cal.t
-% and the heading is the rigid body's x axis projected on the floor, from floor +x (Optitrack/motive_to_floor.m).
-% The base pose the controller then receives is ABSOLUTE: where the robot actually is on the floor.
-% THE VALUES BELOW ARE NOT MEASURED. Identity, zero and 1 are placeholders until the lab frame calibration
-% (Plan 3 Part C, lab/fit_motive_cal.m); only then is measured set to true. While measured is false, a run with
-% EnableHardware = 1, EnableMotive = 1 and motive_source = 'optitrack' is refused (motive_cal_check.m), because
-% through an unmeasured transform the controller would believe the robot is wherever Motive's origin and axes put
-% it. motive_source = 'emulator' needs no calibration: its pose goes out and back through the same transform.
-motive_cal = struct( ...
-    'R',        eye(3), ...       % 3x3 rotation, Motive frame -> floor frame (-). UNMEASURED placeholder
-    't',        zeros(3, 1), ...  % 3x1 floor-frame position of the Motive origin (m). UNMEASURED placeholder
-    'scale',    1, ...            % metres per Motive unit (m/unit). UNMEASURED placeholder
-    'measured', false);           % true only once the Part C values are entered above (flag)
-
-% SPEED AND SIZE. These apply to EVERY scenario, on top of whatever that
-% scenario was designed around, so one number slows the whole set down.
-%
-%   speed_factor  1.0 = as designed.  0.5 = half speed, so twice the lap time.
-%   size_factor   1.0 = as designed.  0.5 = half the orbit, half the floor.
-%
-% Size costs nothing in timing: dist_scale is a pure spatial similarity
-% (EndEffectorTrajectory scales mu by dist_scale^3), so shrinking the orbit
-% leaves the lap time alone and only reduces how far and how fast the base
-% has to travel.
-%
-% The defaults below are deliberately slow for a first run. Turn them up one
-% step at a time, re-running gate_all each time.
-speed_factor = 1.0;    % of the designed speed. Wheel peak scales with it:
-                       %   0.25 gave 14.6 rpm on the ellipse (24 Sep 2026, onset model);
-                       %   1.0 restored on 24 Sep 2026 (evening) at the author's request,
-                       %   with max_rpm raised to 80 below so the gate can pass.
-size_factor  = 0.50;   % of the designed size
-
-% WHEEL CEILING. The student-tunable wheel limit. CommandGuard scales every
-% wheel command down to it, the whole vector at once so the direction is
-% kept, and check_9dof FAILS a run whose solve asks for more, because a
-% scaled command means the real base moves slower than the model believes.
-% The firmware's hard cap is 120 rev/min (#define MAX_RPM 120,
-% UK-Arduino/ROME_Mega_Code/ROME_Mega_Code.ino:8). 80 was set by the author
-% on 19 Nov 2026: "80 is okay. The 60 was an old estimate, but we actually
-% dont know for sure. I think 80 is okay. This should be tunable on the
-% define_constants though". Tuning it is Plan 2's max_rpm study (TRACKER P4).
-% Change it one step at a time, re-running gate_all each time.
-max_rpm = 80;          % wheel limit (rev/min), applied by CommandGuard
-
-% MEASUREMENT MODEL (simulation, EnableMotive = 0; added 24 Sep 2026). The
-% controller does not read the model's state. It reads a simulated
-% measurement of it, through the SensorModel block: the base pose as the
-% cameras would report it, with white Gaussian noise at the vendor's stated
-% accuracy, and the joint angles as the arm firmware reports them, at one
-% motor step. The rates are not measured; UKDynamics integrates its own.
-% sensor_model = 0 passes the exact state through (the loop before this
-% date). The plant itself is unchanged: the command one step late is the
-% state the ideal actuators are taken to reach.
-sensor_model = 1;                         % 1 measured state | 0 exact state
-mocap_sigma  = [0.3e-3; 0.3e-3; deg2rad(0.05)];
-                       % 3x1 standard deviation of the camera noise on x, y (m)
-                       %   and yaw (rad). OptiTrack, "Motion Capture for
-                       %   Robotics" (web page, Literature Review, accessed
-                       %   24 Sep 2026): "positional error under 0.3 mm and
-                       %   rotational error under 0.05 deg". The stated bound
-                       %   is used as the standard deviation, which is the
-                       %   conservative reading of it.
-mocap_seed   = [11 12 13];                % Random Number seeds per channel, fixed so a run repeats
-enc_step_deg = 1 ./ [44.44444444, 55.55555556, 55.55555556, 46.66666667, 10, 20];
-                       % 1x6 one motor step per joint (deg): stepsDeg in
-                       %   Arm/WorkingCode/Stepper_Commands_JacobsVer/
-                       %   Stepper_Commands_JacobsVer.ino (ucf-asrl/ROME),
-                       %   the table the firmware uses to convert steps to
-                       %   degrees and to report the encoder position.
-                       %   J1 0.0225, J2 0.0180, J3 0.0180, J4 0.0214,
-                       %   J5 0.100, J6 0.050 deg.
-enc_step_rad = deg2rad(enc_step_deg(:));  % 6x1 the same in rad, what SensorModel uses
-
-% ARM JOINT CONVENTION. The model's joint angles and the Teensy firmware's
-% are NOT the same numbers. Model J2 = 0 is the upper arm hanging straight
-% DOWN, 90 is horizontal forward, 180 is straight up; model J3 = 90 is the
-% forearm aligned with the upper arm, 0 is bent 90 deg forward. The AR3
-% (ARCS 1.0 defaults, Annin_AR3_software in the Literature Review folder)
-% has J2 = 0 vertical up and travels 129.6 deg forward, J3 = 0 aligned and
-% travels 143.7 deg forward. The ROME firmware rebases those to J2 0..132
-% and J3 1..141 with the switch at the forward / folded end. Hence
-%
-%     firmware_deg = arm_sign .* model_deg + arm_offset_deg
-%
-% with the values below DERIVED from those files, not yet measured on the
-% arm. GETTING_STARTED.md step 3 is the jog test that confirms each joint;
-% do it before EnableHardware = 1. J1, J4, J5, J6 are symmetric ranges, so
-% only their sign is in question.
-% J1: the arm is mounted so its swing plane is the base's +y (22 Sep 2026,
-% after turning the arm 180 deg on the plate). The model's J1 = 0 swings
-% along +x, so physical "forward" is model J1 = +90 while the firmware reads
-% about 0 there: offset = -90 * arm_sign(1). Sign from jog_joint(1, 30).
-arm_sign       = [ 1  -1  -1   1   1   1];   % +1 same direction as the model
-arm_offset_deg = [ 0 180  90   0   0   0];   % added after the sign, degrees
-% J1 offset back to 0 (23 Sep 2026): with -90 the calibration stalled on J3/J4,
-% which then fold and roll through a different quadrant of the base. 0 is the
-% set that calibrated cleanly at 22:40. On the flipped mount the arm then faces
-% +y, not the model's +x: fine while arm_freeze = 1, to be fixed by the jog
-% test (arm_sign(1), then offset -90 or +90) before tracking is attempted.
-
-% FIRMWARE RANGES, limits[] / otherLimits[] in ROME_Teensy_Code.ino. The
-% command is capped to these in ROMECommand (arm_clamp) after the map above,
-% so nothing outside them is ever sent. The wheel command is capped
-% separately in CommandGuard (max_rpm, scaled as a vector).
-% Copied from ROME_Teensy_Code.ino as they are written there: limits[] is
-% the angle the firmware assigns at each joint's limit switch, otherLimits[]
-% the far end of travel. arm_clamp sorts each pair itself.
-arm_fw_switch = [-180  132  141 -165   90  180];  % limits[]      (switch side)
-arm_fw_other  = [ 160    0    1  165  -90 -170];  % otherLimits[] (non-switch side)
+%% ========================================================================
+%  Below here is the formulation. Leave it alone.
+%  ========================================================================
+arm_freeze_user = NaN;  % arm freeze flag the model reads (flag): NaN until the LAST line of this file sets it, so a run after a partial define_constants is refused (arm_freeze_banner)
+% LAB SETTINGS (focus plan F14a, 19 Nov 2026). The TA file lab_settings.m, next to this file, defines every lab
+% constant (arm_sign, arm_offset_deg, arm_fw_switch, arm_fw_other, arm_fw_margin_deg, max_rpm, motive_cal,
+% base_override, sensor_model, mocap_sigma, mocap_seed, enc_step_deg, enc_step_rad, clearance_margin); nothing else
+% assigns them. It is run from THIS file's folder (lab_settings_file.m), never found on the MATLAB path, and it runs
+% after arm_freeze_user = NaN, so an error in it leaves the flag NaN and the model refuses to run (arm_freeze_banner).
+run(lab_settings_file([mfilename('fullpath') '.m']));   % defines the lab constants above in this workspace (lab_settings.m)
+% RUN MODE (focus plan F12, 19 Nov 2026). The four run flags are DERIVED from run_mode (user block) by
+% run_mode_table.m, the only place the mapping lives. A run_mode other than 1-4 stops this file here
+% (run_mode_table:bad, naming the four modes) with arm_freeze_user still NaN, so the model refuses to run too.
+% run_mode (user block), as it was commented there before F14a (19 Nov 2026):
+% THE RUN MODE, 1 to 4 (the author's four modes, 19 Nov 2026):
+%   1 simulation only (end-effector dynamics sim, pose data from sim)
+%   2 ground vehicle moving, frozen arm, camera off (fake camera)
+%   3 ground vehicle moving, moving arm, camera off (fake camera)
+%   4 ground vehicle moving, moving arm, camera on (OptiTrack; refused until motive_cal is measured)
+% EnableHardware, EnableMotive, motive_source and arm_freeze are DERIVED from it by
+% run_mode_table.m (below "Below here is the formulation"); they are not typed here.
+% Change it here and re-run define_constants, or type rome_mode(n), or press a Mode button
+% on the model's canvas (both re-run this file). Every run of this file prints the mode.
+run_mode_cfg   = run_mode_table(run_mode);        % the mode's flags and banner (struct)
+run_mode_test_override = {};                      % TEST HOOK (cell of flag names): empty here; only tests/dc_set_mode lines in temp copies add to it (arm_freeze_banner then lets those flags differ from the mode)
+EnableHardware = run_mode_cfg.EnableHardware;     % 0 simulate only | 1 command the real robot (flag)
+EnableMotive   = run_mode_cfg.EnableMotive;       % 1 the base pose reaches the controller through the camera pipeline (flag)
+motive_source  = run_mode_cfg.motive_source;      % 'emulator' fake camera | 'optitrack' real cameras (char)
+arm_freeze     = run_mode_cfg.arm_freeze;         % 1 joint command held at q0_9dof(4:9) | 0 the controller's command (flag)
+fprintf('%s\n', run_mode_cfg.banner);             % one line naming the mode, at every run of this file (model load included)
+% arm_freeze (derived above), as the user block commented it before F14a:
 % ARM FREEZE. 1 = the joint command sent to the robot is the parked start
 % posture for the whole run, whatever the model computes; the firmware sees
 % "already at target" and never moves the arm. Needed while the Teensy still
@@ -158,29 +57,25 @@ arm_fw_other  = [ 160    0    1  165  -90 -170];  % otherLimits[] (non-switch si
 % arm_freeze_user, copied from the derived arm_freeze at the END of this file: its switch
 % ArmFreezeSwitch sends q0_9dof(4:9) to ROMECommand while it is 1. Re-run
 % define_constants after changing run_mode; the Run banner says ARM FROZEN / ARM WILL MOVE.
-arm_fw_margin_deg = 2.0;    % cap stays this far inside BOTH ends of every
-                            % joint, so a calibration off by this much still
-                            % never reaches a switch. -90..90 becomes -88..88.
-clearance_margin = 0.05; % m. check_9dof fails a run whose arm link points come closer than
-                         % this to z = 0 (clearance_9dof z_min, whole run). z = 0 is the base
-                         % plate / floor / table plane of the model; every z shifts with the
-                         % unmeasured 0.20 m mount height (ik9_fk.m).
-                         % [Claude's call - author to confirm value]
-
-%% ========================================================================
-%  Below here is the formulation. Leave it alone.
-%  ========================================================================
-arm_freeze_user = NaN;  % arm freeze flag the model reads (flag): NaN until the LAST line of this file sets it, so a run after a partial define_constants is refused (arm_freeze_banner)
-% RUN MODE (focus plan F12, 19 Nov 2026). The four run flags are DERIVED from run_mode (user block) by
-% run_mode_table.m, the only place the mapping lives. A run_mode other than 1-4 stops this file here
-% (run_mode_table:bad, naming the four modes) with arm_freeze_user still NaN, so the model refuses to run too.
-run_mode_cfg   = run_mode_table(run_mode);        % the mode's flags and banner (struct)
-run_mode_test_override = {};                      % TEST HOOK (cell of flag names): empty here; only tests/dc_set_mode lines in temp copies add to it (arm_freeze_banner then lets those flags differ from the mode)
-EnableHardware = run_mode_cfg.EnableHardware;     % 0 simulate only | 1 command the real robot (flag)
-EnableMotive   = run_mode_cfg.EnableMotive;       % 1 the base pose reaches the controller through the camera pipeline (flag)
-motive_source  = run_mode_cfg.motive_source;      % 'emulator' fake camera | 'optitrack' real cameras (char)
-arm_freeze     = run_mode_cfg.arm_freeze;         % 1 joint command held at q0_9dof(4:9) | 0 the controller's command (flag)
-fprintf('%s\n', run_mode_cfg.banner);             % one line naming the mode, at every run of this file (model load included)
+% speed_factor and size_factor (user block), as they were commented there before F14a:
+% SPEED AND SIZE. These apply to EVERY scenario, on top of whatever that
+% scenario was designed around, so one number slows the whole set down.
+%
+%   speed_factor  1.0 = as designed.  0.5 = half speed, so twice the lap time.
+%   size_factor   1.0 = as designed.  0.5 = half the orbit, half the floor.
+%
+% Size costs nothing in timing: dist_scale is a pure spatial similarity
+% (EndEffectorTrajectory scales mu by dist_scale^3), so shrinking the orbit
+% leaves the lap time alone and only reduces how far and how fast the base
+% has to travel.
+%
+% The defaults below are deliberately slow for a first run. Turn them up one
+% step at a time, re-running gate_all each time.
+% speed_factor = 1.0     of the designed speed. Wheel peak scales with it:
+%   0.25 gave 14.6 rpm on the ellipse (24 Sep 2026, onset model);
+%   1.0 restored on 24 Sep 2026 (evening) at the author's request,
+%   with max_rpm raised to 80 below so the gate can pass.
+% size_factor  = 0.50    of the designed size
 % Define constants used throughout the model
 % This file is run once automatically when the project is opened
 % Run this file again after making any changes to update the workspace
@@ -240,7 +135,7 @@ tool_tilt_deg = 0;  % tilt of the tool z axis from straight down, about the tool
                     %   Probed on scenario 1 at +15 and -15 deg (24 Sep 2026): both seed
                     %   and screen stable, s 0.683 / 0.667 against 0.677 at 0, no joint
                     %   clamped, J5 -13.2 / -33.7 firmware deg against -23.8.
-% max_rpm is in the user block above (80, author 19 Nov 2026); the firmware's
+% max_rpm is in lab_settings.m (80, author 19 Nov 2026); the firmware's
 % own cap is 120 (ROME_Mega_Code.ino:8).
                     % CommandGuard saturates the wheel command to this before
                     % it reaches ROMECommand.
@@ -430,8 +325,8 @@ fprintf('  Rates   all zero. Let it sit still before you start.\n');
 fprintf('\n  Order: set run_mode FIRST (rome_mode(n)) -> place base -> calibrateROMEArm -> Run.\n');
 fprintf('  calibrateROMEArm parks the arm at the angles above (mapped to\n');
 fprintf('  firmware degrees). arm_sign / arm_offset_deg are derived from\n');
-fprintf('  the AR3 files, not measured: run the jog test, GETTING_STARTED.md\n');
-fprintf('  step 3, before the first robot run. Joint commands are capped to\n');
+fprintf('  the AR3 files, not measured (lab_settings.m, kept by the TA). Steps:\n');
+fprintf('  docs/student_procedure/ROME_student_sheet.pdf. Joint commands are capped to\n');
 fprintf('  the firmware ranges, wheels to max_rpm.\n');
 fprintf('==========================================\n\n');
 
@@ -442,7 +337,7 @@ end
 if T_scaled > 30
     fprintf('Note: Orbit duration is currently %.1fs (Target: <30s).\n', T_scaled);
 end
-dc_sha_at_run = dc_file_sha([mfilename('fullpath') '.m']);  % SHA-256 (hex char) of this file as run; arm_freeze_banner refuses a Run when define_constants.m changed since (stale workspace)
+dc_sha_at_run = settings_sha([mfilename('fullpath') '.m']);  % SHA-256 (hex char) over this file AND lab_settings.m as run (F14a); arm_freeze_banner refuses a Run when either changed since (stale workspace)
 % ARM FREEZE, the value the model uses (Plan 2 Task 5 / focus plan F1, 19 Nov 2026).
 % ROMECommand.m L56 writes arm_freeze = 0 into the base workspace when a run
 % starts (every run, also EnableHardware = 0). The model's Constant is read at

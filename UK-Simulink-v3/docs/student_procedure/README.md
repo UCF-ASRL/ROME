@@ -1,5 +1,12 @@
 # ROME student lab procedure (Plan 3 Task 5, spec Part G)
 
+**Split on 20 Nov 2026 (focus plan F14b).** The procedure is now two documents:
+- `ROME_student_sheet.tex` / `.pdf`: the short sheet a student follows at the robot (at most 6 pages, checked): one card per mode in run order (set the mode with the Mode button or `rome_mode(n)`, place, calibrate, Run, read the result, save with `save_run`). Built with `\showsrcfalse`: its `\src` citations are checked but not printed.
+- `ROME_TA_manual.tex` / `.pdf`: everything else (one-time setup, Part C and Part F sign-offs, `lab_settings.m`, the TA notes behind each card, stopping in full, the troubleshooting entries keyed to TRACKER section 0, the file map, the test suite, the sources).
+- `ROME_lab_procedure.tex` / `.pdf` (19 Nov) is **superseded**, kept until the author approves the split, marked so on its first page, and no longer ported by `port_to_repo.py` (DOC_NOT_PORTED). Its citations are no longer locked; `check_procedure.py --tex ROME_lab_procedure.tex` still checks it (role legacy).
+
+`python -I -X utf8 check_procedure.py` checks BOTH new documents (checks C1-C8; C7 = student sheet at most 6 pages, PDF not older than the .tex, no printed source citation; C8 = never calibrate before setting the mode). The text below describes the single procedure of 19 Nov and is kept as history; where it names `ROME_lab_procedure.tex`, read the two new files.
+
 DRAFT of 19 Nov 2026. **Compiled** on the author's PC on 19 Nov (night, doc pass) with MiKTeX `pdflatex` (`%LOCALAPPDATA%\Programs\MiKTeX\miktex\bin\x64`, not on PATH), three passes in a copy of this folder (the second still asked for a Rerun): no LaTeX error; the PDF is `ROME_lab_procedure.pdf` beside the `.tex`. Rebuild it after every edit (pdflatex twice in a copy, once more if the log says Rerun) or on Overleaf as below.
 
 ## Files
@@ -56,7 +63,7 @@ When Step 0 or Step 1 has produced new files, upload only `figures/` and `genera
 | Bench sign-off for mode 2 without the joint-map test (Sections 2, 8) | CLOSED 19 Nov: the author decided "Full Part F" (TRACKER Q-P4-a): the whole bench checklist, joint-map test included, before any robot run, mode 2 included. |
 | J2, J5, J6 joint maps (Section 8 box; every robot mode, since the whole bench checklist comes first) | Part F item 24, bench jog test (TRACKER section 0, J2 row) |
 | Mode 4 only: NaN-safe start and dropout stop, start procedure A (Section 8) | Focus plan F6, F8 |
-| Pre-run check, sign-off file (Sections 2, 4, 8) | Plan 3 Task 4 = focus plan F2 (`prerun_check.m`, `lab_signoff.m`) |
+| Pre-run check, sign-off file (Sections 2, 4, 8) | Plan 3 Task 4 = focus plan F2 (`prerun_check.m`; sign-off dates `signoff_partF` / `signoff_partC` in `lab_settings.m`) |
 | Mode 4 refused until the lab frame is measured (`motive_cal.measured`); modes 2 and 3 need no lab frame | In code (F5b, F7: `motive_cal_check:unmeasured` for 'optitrack' only); Part C visit sets the values |
 | How much shorter the base travel is in modes 2 and 3 because of the pacing start-up lag (Section 8, NOT VERIFIED) | TRACKER section 2, row "Pacing start-up lag ACCEPTED", to-do (1), from the Task 1c recordings |
 | Workspace size for modes 2 and 3, and where it lies relative to the start pose (Section 7) | The run plan `docs/lab/PART_I_RUN_PLAN.md` (the model prints 2.10 x 2.10 m for case 1). That plan was rewritten for the four modes on 19 Nov (TRACKER Q-P4-b) and gives the size the model prints; where the area lies relative to the start pose is still open. |

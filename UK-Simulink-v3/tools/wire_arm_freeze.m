@@ -42,7 +42,7 @@ path0 = path;                                  % MATLAB path at entry, restored 
 addpath(root, fullfile(root, 'Ground Vehicle'), fullfile(root, 'Optitrack'));
 cleanup = onCleanup(@() path(path0)); %#ok<NASGU>
 pacOnly = 'apply_pacing(bdroot)';                              % InitFcn before F1 (char)
-pacBan  = 'apply_pacing(bdroot); arm_freeze_banner(bdroot)';   % InitFcn with the banner (char)
+pacBan  = 'apply_pacing(bdroot); arm_freeze_banner(bdroot); prerun_check(bdroot)';   % InitFcn with the banner (char) + prerun_check (F2, tools/wire_prerun_check.m)
 SW = [mdl '/ArmFreezeSwitch'];                 % block paths (char)
 CU = [mdl '/ArmFreezeUser'];
 CP = [mdl '/ArmFreezePosture'];

@@ -44,11 +44,11 @@ function varargout = test_motive_model(brk)
 %          memory); openSocket was called (the reader ran with both flags on); premises above.
 %     (n)  pure: motive_floor_block (the chart script file) fed NaN(7,1) three times then p7s returns NaN, NaN, NaN,
 %          then E (the unwrap state is not poisoned by NaN and stays seeded from q0_9dof(3)).
-%          model (nan run): IF the run returned, q_track is NaN at the 3 first steps and E (1e-12) at every later
+%          model (nan run): IF the run returned, q_track is the F6 camera guard's seed q0_9dof(1:3) (was NaN before F6) at the 3 first steps and E (1e-12) at every later
 %          step; if the run stopped, NOT EVALUATED and its error is printed (NaN into UKDynamics is the existing
 %          behaviour, F6 scope). q_cmd / wheel_sent finiteness is PRINTED, not asserted (observation for F6).
 %     (g)  g run: openSocket called 0 times (the real reader stays shut without EnableHardware: no socket, no 500 ms
-%          timeouts in an emulated run); IF the run returned, q_track is NaN at every step (no frame, never held
+%          timeouts in an emulated run); IF the run returned, q_track is the F6 guard's seed q0_9dof(1:3) at every step (no frame; NaN before F6; never held
 %          zeros or q0). The model executes MotiveData before UKDynamics (data dependency), so a later stop of the
 %          run cannot hide a socket opened at the first step.
 %     (v)  motive_cal_check: v1 EnableHardware 1, EnableMotive 1, measured false -> motive_cal_check:unmeasured, the
@@ -106,6 +106,7 @@ startdir = pwd;  path0 = path;                % restored at exit
 if bdIsLoaded(mdl), close_system(mdl, 0); end
 mkdir(tmp);
 copyfile(root, tmp);
+prerun_fixture('signoff', tmp);              % F2 wiring: Part F/C sign-off dates in the COPY's lab_settings.m (prerun_check refuses robot runs without)
 copyfile(fullfile(here, 'stubs_hw', 'ROMECommand.m'), fullfile(tmp, 'ROMECommand.m'), 'f');
 copyfile(fullfile(here, 'stubs_hw', 'RobotLinkRecorder.m'), fullfile(tmp, 'RobotLinkRecorder.m'), 'f');
 copyfile(fullfile(here, 'stubs_motive', 'MotiveDataInject.m'), fullfile(tmp, 'MotiveDataInject.m'), 'f');
@@ -197,6 +198,7 @@ for r = 1:size(cfg, 1)
     if EH, assignin('base', 'sensor_model', 0); end   % apply_pacing refuses a hardware run with SensorModel noise on
     if useCal, assignin('base', 'motive_cal', cal); end
     if isfile(cntf), delete(cntf); end
+    prerun_fixture('park', tmp);             % F2/F11 wiring: park record of the copy's settings, as calibrateROMEArm writes it
     evalin('base', 'clear ukd_current');
     err = '';  haveOut = false;  out = [];  simtxt = '';
     try
@@ -270,9 +272,10 @@ catch en
 end
 S = R.nan;
 if S.haveOut && ~isempty(S.Q)
-    okNm = size(S.Q, 2) > nTO + 10 && all(all(isnan(S.Q(:, 1:nTO)))) && max(max(abs(S.Q(:, nTO+1:end) - S.E))) <= tolE;
-    fprintf('n    model: q_track NaN at steps 1-%d %d, later max |. - oracle| %.3e -> %s (q_cmd finite %g, wheel_sent finite %g: observation, F6)\n', ...
-            nTO, all(all(isnan(S.Q(:, 1:nTO)))), max(max(abs(S.Q(:, nTO+1:end) - S.E))), mat2str(okNm), S.qcmdFinite, S.wheelFinite);
+    seedN = isequal(S.Q(:, 1:nTO), repmat(S.q0(1:3), 1, nTO));   % F6: the camera guard outputs the seed q0_9dof(1:3) until the first frame
+    okNm = size(S.Q, 2) > nTO + 10 && seedN && max(max(abs(S.Q(:, nTO+1:end) - S.E))) <= tolE;
+    fprintf('n    model: q_track = seed q0_9dof(1:3) at steps 1-%d %d (F6 guard, was NaN), later max |. - oracle| %.3e -> %s (q_cmd finite %g, wheel_sent finite %g)\n', ...
+            nTO, seedN, max(max(abs(S.Q(:, nTO+1:end) - S.E))), mat2str(okNm), S.qcmdFinite, S.wheelFinite);
 else
     okNm = true;
     fprintf('n    model: NOT EVALUATED, the nan run stopped (existing NaN behaviour, F6 scope): %s\n', S.err(1:min(end, 300)));
@@ -283,8 +286,9 @@ if ~(okN && okNm), fails{end+1} = sprintf('(n) NaN before the first frame: pure 
 S = R.g;
 okG = S.nOpen == 0;
 if S.haveOut && ~isempty(S.Q)
-    okG = okG && all(isnan(S.Q(:)));
-    fprintf('g    EnableHardware 0: openSocket x%d, q_track all NaN %d over %d steps -> %s\n', S.nOpen, all(isnan(S.Q(:))), size(S.Q, 2), mat2str(okG));
+    seedG = isequal(S.Q, repmat(S.q0(1:3), 1, size(S.Q, 2)));   % F6: no frame ever -> the guard's seed at every step (was NaN)
+    okG = okG && seedG;
+    fprintf('g    EnableHardware 0: openSocket x%d, q_track = seed q0_9dof(1:3) at all %d steps %d (F6 guard, was NaN) -> %s\n', S.nOpen, size(S.Q, 2), seedG, mat2str(okG));
 else
     fprintf('g    EnableHardware 0: openSocket x%d; run stopped, q_track NOT EVALUATED -> %s\n', S.nOpen, mat2str(okG));
 end

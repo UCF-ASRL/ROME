@@ -15,7 +15,7 @@ ok = ok && pass1;
 
 fprintf('--- check 2: q = 0, the two maps\n');
 [sg, off] = viewer_arm_map(rmDir);
-fprintf('arm_sign %s  arm_offset_deg %s  (parsed from define_constants.m text)\n', mat2str(sg'), mat2str(off'));
+fprintf('arm_sign %s  arm_offset_deg %s  (parsed from lab_settings.m text)\n', mat2str(sg'), mat2str(off'));
 pass2a = isequal(sg', [1 -1 -1 1 1 1]) && isequal(off', [0 180 90 0 0 0]);
 fprintf('parsed map equals the values read on 19 Nov (L121-122): %s\n', passstr(pass2a));
 fw0 = sg .* 0 + off;

@@ -53,7 +53,7 @@ function varargout = test_motive_emulator(brk)
 %              base and state_in(1) = q0_9dof (1e-12); state_in(k) joints = decode of the telemetry answered at step
 %              k-1 = ((fw - arm_offset_deg) ./ arm_sign) pi/180 (1e-12), state_in(1) joints = q0_9dof(4:9);
 %           c  h2's ROME lines equal h1's (EnableMotive 0 stream), same count, every field within half a unit of the %.3f
-%              print (test_hw_nocam tolerance); string-identical count and first difference printed;
+%              print (test_hw_nocam tolerance); string-identical count and first difference printed; F6: lines before the arm-ready go (arm_gate) must carry zero wheels and are left out;
 %           d  h2's ROME lines equal h2's own wheel_sent / joint_sent_rad through map and clamp, half a unit;
 %           e  pacing: h2 wall span of the ROME lines >= 0.9 x simulated span, EnablePacing on at PacingRate 1;
 %           f  h2 and h4: START_GV first and STOP_ALL last, once each, STOP_ALL before sim() returned at the final
@@ -66,6 +66,9 @@ function varargout = test_motive_emulator(brk)
 %              state_in(k) joints = decode of the echo at k-1 (1e-12) while differing from q_cmd(k-1) joints by
 %              > 1e-9 rad somewhere (the %.3f print: the joints come from telemetry, not from StateDelay); banner
 %              'ARM WILL MOVE' in h2. Peak wheel is PRINTED (wheel <= max_rpm cannot fail: CommandGuard enforces it).
+%           h  (wire3 fix 4) h5, mode 3, the fake arm reports READY only at its 11th answer: the base the controller reads
+%              stays at q0_9dof (1e-12) through the whole wait (PlantGate holds the emulated plant while CmdGate is closed),
+%              no wheel is sent there, and the run reaches T_stop. Make-it-fail mf_ungated (PlantGate bypassed) -> (iii) h.
 %     (r)   unwrap state reset (F5b review I2): r1's q_track heading sweeps >= 2 pi past q0(3) (premise); normal
 %           restart: r2 starts at q0(3) (1e-12) and equals r1 at every step (1e-12); Fast Restart: fr1 and fr2 are both
 %           refused with apply_pacing:fastrestartcam and return nothing (ruling: Fast Restart refused whenever
@@ -96,7 +99,8 @@ B = { ...
               'unwrap state carried from one run to the next (stored in root appdata, as a persistent that is never reset would)'; ...
   'mf_tolrun', 'i', {{'tolrun', 1e-12}}, 'whole-run backstop tightened to 1e-12 (below the measured 7.7e-11): shows the backstop of (i) and (ii) can fail (F7 re-review)'; ...
   'mf_h4tel', 'iii', {{'param', 'JointFromTelemetry', 'Value', '0'}}, 'JointSource never takes telemetry: in h4 (mode 3, arm moving) the controller reads the model''s joints instead of the arm telemetry (F7 re-review)'; ...
-  'mf_noisegate', 'iii', {{'chart', 'MotiveEmulator', 'if motive_emulate_noise ~= 0 && sensor_model ~= 0', 'if motive_emulate_noise ~= 0'}}, 'emulator noise gate without its sensor_model term: h2 (robot, motive_emulate_noise 1) gets synthetic camera noise (F7 re-review)'};
+  'mf_noisegate', 'iii', {{'chart', 'MotiveEmulator', 'if motive_emulate_noise ~= 0 && sensor_model ~= 0', 'if motive_emulate_noise ~= 0'}}, 'emulator noise gate without its sensor_model term: h2 (robot, motive_emulate_noise 1) gets synthetic camera noise (F7 re-review)';
+  'mf_ungated', 'iii', {{'ungated'}}, 'wire3 fix 4 undone: StateDelay takes UKDynamics q_cmd ungated again (PlantGate bypassed), so the emulated base moves while CmdGate holds the wheels (h5 waits 11 steps)'};
 if strcmp(brk, 'list'), varargout{1} = B; return; end
 ib = [];                                      % row of the break in B (empty: no break)
 if ~isempty(brk)
@@ -106,12 +110,12 @@ if ~isempty(brk)
 end
 if isappdata(0, 'f7_carry'), rmappdata(0, 'f7_carry'); end
 
-% ---- limits and map from the user's define_constants.m (independent of any break) --------------------------------
-dc0 = fileread(fullfile(root, 'define_constants.m'));   % ROME_merged/define_constants.m text (char)
+% ---- limits and map from the user's lab_settings.m (independent of any break; F14a: moved there) -------------------
+dc0 = fileread(fullfile(root, 'lab_settings.m'));   % ROME_merged/lab_settings.m text (char)
 L = struct();                                 % user-block values (rpm, deg, sign, flag)
 for nm = {'max_rpm', 'arm_sign', 'arm_offset_deg', 'arm_fw_switch', 'arm_fw_other', 'arm_fw_margin_deg'}
     tok = regexp(dc0, ['(?m)^' nm{1} '\s*=\s*([^;%]+);'], 'tokens');
-    assert(numel(tok) == 1, 'test_motive_emulator:dc', '%s: %d user-block lines in define_constants.m (expected 1)', nm{1}, numel(tok));
+    assert(numel(tok) == 1, 'test_motive_emulator:dc', '%s: %d lines in lab_settings.m (expected 1)', nm{1}, numel(tok));
     L.(nm{1}) = eval(tok{1}{1});
 end
 fwLo = min(L.arm_fw_switch, L.arm_fw_other) + L.arm_fw_margin_deg;   % 1x6 lowest joint command allowed (firmware deg)
@@ -125,6 +129,7 @@ startdir = pwd;  path0 = path;                % restored at exit
 if bdIsLoaded(mdl), close_system(mdl, 0); end
 mkdir(tmp);
 copyfile(root, tmp);
+prerun_fixture('signoff', tmp);              % F2 wiring: Part F/C sign-off dates in the COPY's lab_settings.m (prerun_check refuses robot runs without)
 realtxt = fileread(fullfile(root, 'ROMECommand.m'));   % Keanu's class (char)
 old = 'tcpclient(obj.ESP32_IP, obj.ESP32_Port, "ConnectTimeout", 5)';
 n = numel(strfind(realtxt, old));
@@ -174,6 +179,9 @@ if ~isempty(ib)
                 delete_line(mdl, 'StateDelay/1', 'MotiveEmulator/1');
                 add_block('simulink/Sources/Constant', [mdl '/F7ConstPose'], 'Value', 'q0_9dof');
                 add_line(mdl, 'F7ConstPose/1', 'MotiveEmulator/1');
+            case 'ungated'
+                delete_line(mdl, 'PlantGate/1', 'StateDelay/1');
+                add_line(mdl, 'UKDynamics/1', 'StateDelay/1');
             case 'param'
                 fprintf('  break: %s %s ''%s'' -> ''%s''\n', ed{2}, ed{3}, get_param([mdl '/' ed{2}], ed{3}), ed{4});
                 set_param([mdl '/' ed{2}], ed{3}, ed{4});
@@ -196,35 +204,57 @@ end
 % ---- define_constants flag lines of the copy -----------------------------------------------------------------------
 dcf = fullfile(tmp, 'define_constants.m');    % (char)
 fid = fopen(dcf, 'r');  dcBase = char(fread(fid, Inf, '*uint8').');  fclose(fid);
-FL = {'', '', '', 'sensor_model = 1;', '', 'motive_emulate_noise = 1;'};   % flag lines as in the file (char); 1-3 and 5 are derived from run_mode since F12 (dc_set_mode)
-nFL = cellfun(@(s) numel(strfind(dcBase, [lf s])), FL([4 6]));
-assert(all(nFL == 1), 'test_motive_emulator:dc', 'copy define_constants.m flag lines matched %s times (expected 1 each)', mat2str(nFL));
+labf = fullfile(tmp, 'lab_settings.m');      % the copy's lab_settings.m (char; F14a: sensor_model moved there)
+fid = fopen(labf, 'r');  labBase = char(fread(fid, Inf, '*uint8').');  fclose(fid);
+FL = {'', '', '', 'sensor_model = 1;', '', 'motive_emulate_noise = 1;'};   % flag lines as in the files (char); 1-3 and 5 are derived from run_mode since F12 (dc_set_mode); 4 is in lab_settings.m since F14a
+nFL = [numel(strfind(labBase, [lf FL{4}])), numel(strfind(dcBase, [lf FL{6}]))];
+assert(all(nFL == 1), 'test_motive_emulator:dc', 'copy lab_settings.m / define_constants.m flag lines matched %s times (expected 1 each)', mat2str(nFL));
 setfl = @(t, k, v) strrep(t, [lf FL{k}], [lf regexprep(FL{k}, '=\s*.*;$', ['= ' v ';'])]);   % set flag line k to value text v
 
 rows = @(d, N) reshape(permute(d, [find(size(d) == N, 1, 'last'), setdiff(1:ndims(d), find(size(d) == N, 1, 'last'))]), N, []);   % logged Data -> N x n
 blkM = [mdl '/Enabled' newline 'Subsystem/MATLAB System'];   % the MotiveData block (SID 105)
 % name | EH | EM | sensor_model (sim only) | motive_emulate_noise | arm_freeze | telemetry: '' echo, 'replay'
 cfg = {'s0', 0, 0, 0, 0, 1, ''; 's1', 0, 1, 0, 0, 1, ''; 's3', 0, 0, 1, 0, 1, ''; 's4', 0, 1, 1, 1, 1, ''; 's2', 0, 1, 1, 0, 1, ''; ...
-       'h1', 1, 0, 0, 0, 0, ''; 'h2', 1, 1, 0, 1, 0, 'replay'; 'h3', 1, 1, 0, 0, 1, ''; 'h4', 1, 1, 0, 0, 0, ''};   % h2 motive_emulate_noise 1: the gate must keep the noise off on the robot (sensor_model forced 0; F7 re-review)
+       'h1', 1, 0, 0, 0, 0, ''; 'h2', 1, 1, 0, 1, 0, 'replay'; 'h3', 1, 1, 0, 0, 1, ''; 'h4', 1, 1, 0, 0, 0, ''; 'h5', 1, 1, 0, 0, 0, 'delay'};   % h2 motive_emulate_noise 1: the gate must keep the noise off on the robot (sensor_model forced 0; F7 re-review)
 R = struct();
 if isfile(cntf), delete(cntf); end
 for r = 1:size(cfg, 1)
     [nm, EH, EM, SM, NZ, AF, TL] = cfg{r,:};
     if ~EH, nRun = 1; elseif AF, nRun = 2; else, nRun = 3; end   % run mode with this EnableHardware and arm_freeze (F12)
     t = dc_set_mode(dcBase, nRun, struct('EnableHardware', EH, 'EnableMotive', EM, 'arm_freeze', AF));  t = setfl(t, 6, num2str(NZ));
-    if ~EH, t = setfl(t, 4, num2str(SM)); end
+    lab = labBase;                            % the copy's lab_settings.m for this run (char)
+    if ~EH, lab = setfl(lab, 4, num2str(SM)); end
     fid = fopen(dcf, 'w');  fwrite(fid, uint8(t));  fclose(fid);
+    fid = fopen(labf, 'w');  fwrite(fid, uint8(lab));  fclose(fid);
     if isfile(recf), delete(recf); end
     if strcmp(TL, 'replay')
         Q1 = R.h1.Q;                          % h1's q_cmd (N x 9): the joints the EnableMotive 0 run commanded
         fw = L.arm_sign .* rad2deg(Q1(:, 4:9)) + L.arm_offset_deg;   % firmware degrees, unclamped (N x 6)
+        % wire3 fix 2: h2 (mode 3) waits ONE step for the arm-ready go (its first answer reaches ArmReady through
+        % ArmReadyDelay), and its reference clock starts at the go (ref_clock_block.m); h1 (EnableMotive 0: no arm wait,
+        % ArmWaitOn) starts at t = 0. So h2's step k+1 is h1's step k. The fake arm must report, at h2's step k+1, what
+        % h1's controller read at its step k: answer 1 = the parked posture q0_9dof(4:9) (what h1 reads at step 0), answer
+        % n = h1's command of step n-2. Without this one-row shift h2 closed its loop on telemetry one step AHEAD of its
+        % own reference and drifted (8.39 deg on J1 at the end, wire3fix1_tme2.log).
+        q0r = R.h1.q0_9dof;                   % 9x1 start configuration of h1 (m, rad)
+        fw = [L.arm_sign .* rad2deg(q0r(4:9).') + L.arm_offset_deg; fw(1:end-1, :)];   % same row count (N x 6)
         fid = fopen(repf, 'w');  fprintf(fid, 'ARM,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,READY\n', fw.');  fclose(fid);
+    elseif strcmp(TL, 'delay')
+        % wire3 fix 4, h5: the fake arm reports READY only at its 11th answer (answers 1-10 carry the parked angles with
+        % state CALIBRATING, so ROMECommand's armReady stays false); then h1's commands shifted by the 11-step wait, as h2.
+        nD = 11;  Q1 = R.h1.Q;  q0r = R.h1.q0_9dof;
+        fwD = L.arm_sign .* rad2deg(Q1(:, 4:9)) + L.arm_offset_deg;
+        fwD = [repmat(L.arm_sign .* rad2deg(q0r(4:9).') + L.arm_offset_deg, nD, 1); fwD(1:end-nD, :)];   % same row count
+        stD = [repmat({'CALIBRATING'}, nD - 1, 1); repmat({'READY'}, size(fwD, 1) - nD + 1, 1)];
+        fid = fopen(repf, 'w');
+        for kD = 1:size(fwD, 1), fprintf(fid, 'ARM,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%s\n', fwD(kD, :), stD{kD}); end
+        fclose(fid);
     elseif isfile(repf)
         delete(repf);
     end
     nOpen0 = 0;  if isfile(cntf), nOpen0 = numel(strfind(fileread(cntf), 'openSocket')); end
     evalin('base', 'clear all');
-    clear define_constants;  rehash;
+    clear define_constants lab_settings;  rehash;
     evalc('load_system(slx)');                % PostLoadFcn = the copy's define_constants
     sim0 = get_param(blkM, 'SimulateUsing');
     set_param(blkM, 'System', 'MotiveDataCounting');
@@ -234,6 +264,7 @@ for r = 1:size(cfg, 1)
     load_system('simulink');
     add_block('simulink/Sinks/To Workspace', [mdl '/F7StateIn'], 'VariableName', 'state_in', 'SaveFormat', 'Timeseries');
     add_line(mdl, 'StateSource/1', 'F7StateIn/1');
+    prerun_fixture('park', tmp);             % F2/F11 wiring: park record of the copy's settings, as calibrateROMEArm writes it
     evalin('base', 'clear ukd_current');
     err = '';  haveOut = false;  out = [];  simtxt = '';
     t0 = tic;
@@ -266,6 +297,7 @@ for r = 1:size(cfg, 1)
         S.t = out.q_cmd.Time;  N = numel(S.t);
         S.Q = rows(out.q_cmd.Data, N);  S.QM = rows(out.q_meas.Data, N);  S.SI = rows(out.state_in.Data, N);
         S.QT = rows(out.q_track.Data, N);  S.W = rows(out.wheel_sent.Data, N);  S.J = rows(out.joint_sent_rad.Data, N);
+        S.AG = [];  try, S.AG = rows(out.arm_gate.Data, N); catch, end   % F6 ArmReady [go waiting refuse] (absent before F6)
         S.G = rows(out.guard_flag.Data, N);   % CommandGuard flag per step (0 pass, 1 wheels scaled, 2 non-finite)
     end
     fprintf('run %s EnableHardware %d EnableMotive %d (%s) sensor_model %s noise %s arm_freeze_user %s telemetry %s: returned %d, %d steps, %d records, openSocket x%d, wall %.1f s, pacing %s %g\n', ...
@@ -351,9 +383,13 @@ eB = Inf;  eJ = Inf;  eJ1 = Inf;  e0 = Inf;   % max |base - q_cmd(k-1) base|, |j
 N2 = numel(H2.t);
 cb = H2.haveOut && N2 > 10 && size(P.h2.TA, 1) >= N2 - 1;
 if cb
-    eB = max(abs(H2.SI(2:end, 1:3) - H2.Q(1:end-1, 1:3)), [], 'all');
+    % wire3 fix 4: the plant (StateDelay) takes the GATED command (PlantGate). h2 waits nW steps with the wheel gate
+    % closed: the base read at steps 2..nW+1 is the held start q0, after that q_cmd(k-1) as before.
+    nWb = 0;  if size(H2.AG, 1) == N2, nWb = find(H2.AG(:, 1) ~= 0, 1) - 1; end   % waiting steps (count)
+    eB = max(abs(H2.SI(nWb+2:end, 1:3) - H2.Q(nWb+1:end-1, 1:3)), [], 'all');
+    if nWb > 0, eB = max(eB, max(abs(H2.SI(2:nWb+1, 1:3) - q0(1:3).'), [], 'all')); end
     eJ = max(abs(H2.SI(2:end, 4:9) - decode(P.h2.TA(1:N2-1, :))), [], 'all');
-    if isequal(size(H1.Q), size(H2.Q)), eJ1 = max(abs(H2.SI(2:end, 4:9) - H1.Q(1:end-1, 4:9)), [], 'all'); end
+    if isequal(size(H1.Q), size(H2.Q)), eJ1 = max(abs(H2.SI(3:end, 4:9) - H1.Q(1:end-2, 4:9)), [], 'all'); end   % h2 reads h1's command one step later (fix 2 replay shift)
     e0 = max(abs(H2.SI(1, :).' - q0));
     cb = eB <= tolQ && eJ <= tolQ && e0 <= tolQ;
 end
@@ -364,10 +400,43 @@ fprintf('         |arm_home - q0_9dof(4:9)| = %s deg (the old TelemetryDelay IC;
 V1 = P.h1.V;  V2 = P.h2.V;  dC = Inf;  nSame = 0;  kDiff = NaN;
 cc = P.h1.fmt && P.h2.fmt && size(V1, 1) > 0 && isequal(size(V1), size(V2)) && size(V2, 1) == N2;
 if cc
-    dC = max(abs(V2 - V1), [], 'all');
+    goL = false(size(V2, 1), 1);  if size(H2.AG, 1) == size(V2, 1), goL = H2.AG(:, 1) ~= 0; end   % F6: lines sent before the arm-ready go (logical)
+    z0 = size(H2.AG, 1) == size(V2, 1) && all(V2(~goL, 1:4) == 0, 'all');   % those lines carry zero wheels (CmdGate)
+    nW = sum(~goL);                           % lines before the go (count)
+    % wire3 fix 2: aligned on the release step: h2's line nW+k equals h1's line k (reference frozen until the go)
+    Dd = abs(V2(nW+1:end, :) - V1(1:end-nW, :));  dC = max(Dd, [], 'all');
+    [~, iMx] = max(Dd(:));  [rMx, cMx] = ind2sub(size(Dd), iMx);   % diagnostic: where the largest difference is
+    fprintf('         aligned on the go (shift %d): largest |h2 - h1| at h1 line %d of %d, field %d: %.3g\n', nW, rMx, size(Dd, 1), cMx, dC);
+    % wire3 fix 3 DIAGNOSTIC ONLY (the pass rule above is unchanged): where the aligned residual sits, and the one-step
+    % offset the waiting step leaves in the emulated plant (StateDelay takes UKDynamics q_cmd ungated, so during the wait the
+    % emulated base moves by the controller's one-step command even though CmdGate sends zero wheels).
+    dW = max(Dd(:, 1:4), [], 2);  dJ = max(Dd(:, 5:10), [], 2);   % per aligned line: wheels (rpm), joints (deg)
+    nL = size(Dd, 1);  pick = unique([1:min(20, nL), 50, 100, 300, nL]);  pick = pick(pick <= nL);
+    fprintf('         aligned residual per h1 line (wheels rpm | joints deg):\n');
+    for ip = pick, fprintf('           line %4d: %.6f | %.6f\n', ip, dW(ip), dJ(ip)); end
+    badL = find(max(Dd, [], 2) > tolField);    % aligned lines above the tolerance
+    if isempty(badL), fprintf('         every aligned residual <= %g from line 1\n', tolField);
+    elseif badL(end) == nL, fprintf('         residual stays <= %g after line: never (last line above it: %d)\n', tolField, badL(end));
+    else, fprintf('         residual stays <= %g after line %d (last line above it)\n', tolField, badL(end)); end
+    try
+        q0d = H2.q0_9dof(:).';                % 1x9 start configuration (m, rad)
+        offPred = H2.Q(1, 1:3) - q0d(1:3);    % predicted: h2's waiting-step command minus q0 = one step qdd*dt^2 (base, m m rad)
+        offMeas = H2.SI(2, 1:3) - H1.SI(1, 1:3);   % measured: base h2's controller reads at the go minus h1's at step 0
+        fprintf('         one-step offset at the go, base [x y psi]: predicted (h2 q_cmd(wait) - q0) %s, measured (h2 state(go) - h1 state(0)) %s\n', mat2str(offPred, 4), mat2str(offMeas, 4));
+    catch eo
+        fprintf('         one-step offset: not computed (%s)\n', eo.message);
+    end
+    z0 = z0 && nW == 1;                       % the replay above assumes exactly one waiting line
+    for kq = [300 numel(H1.t) - nW]           % wire3 fix 4 item 4: the joints as logged doubles, aligned (rad)
+        if kq + nW <= size(H2.J, 1) && kq <= size(H1.J, 1)
+            fprintf('         doubles, aligned h1 line %d: |joint_sent_rad h2 - h1| max %.3e rad, |q_cmd h2 - h1| max %.3e\n', kq, ...
+                    max(abs(H2.J(kq + nW, :) - H1.J(kq, :))), max(abs(H2.Q(kq + nW, :) - H1.Q(kq, :))));
+        end
+    end
     l1 = P.h1.ln(P.h1.isR);  l2 = P.h2.ln(P.h2.isR);
     same = strcmp(l1, l2);  nSame = sum(same);  kDiff = find(~same, 1);
-    cc = dC <= tolField;
+    cc = dC <= tolField && z0;
+    fprintf('         F6 arm-ready wait: %d line(s) before the go, wheels zero there %d; compared %d lines after it, max diff %.3g\n', nW, z0, sum(goL), dC);
     if ~isempty(kDiff), fprintf('         first differing pair (line %d): h1 %s         h2 %s', kDiff, l1{kDiff}, l2{kDiff}); end
     fprintf('(iii) c  h2 (mode 3) vs h1 (EnableMotive 0): %d ROME lines each; max |field diff| wheels %.3g rpm, joints %.3g deg (tol %.4g); %d / %d lines string-identical, first difference at line %s -> %s\n', ...
             size(V2, 1), max(abs(V2(:,1:4) - V1(:,1:4)), [], 'all'), max(abs(V2(:,5:10) - V1(:,5:10)), [], 'all'), tolField, nSame, size(V2, 1), mat2str(kDiff), mat2str(cc));
@@ -439,22 +508,35 @@ fprintf(['(iii) g  h3 (mode 2, arm frozen): returned %d; joint fields - arm_free
 if ~isempty(H3.err), fprintf('         h3 stopped: %s\n', H3.err(1:min(end, 400))); end
 fprintf('(iii) g  h4 (arm moving, echo): state joints - decoded echo %.3e (need <= %g); decoded echo vs q_cmd(k-1) joints up to %.3e rad (need > 1e-9: telemetry, not StateDelay); peak wheel h2/h4 %.3f rpm (max_rpm %g, printed only); banner [FROZEN MOVE] h2 %s -> %s\n', ...
         eJ4, tolQ, sep4, wPk, L.max_rpm, mat2str(banH2), mat2str(cg));
-okIII = ca && cb && cc && cd_ && ce && cf && cg;
+% h (wire3 fix 4): h5, mode 3, READY only at the arm's 11th answer: the emulated base the controller reads stays at q0
+% (1e-12) through the whole wait, the wheels sent there are 0, and the run completes (T_stop, no error).
+H5 = R.h5;  ch_ = false;  nW5 = NaN;  eW5 = Inf;  wW5 = Inf;  tE5 = NaN;  if ~isempty(H5.t), tE5 = H5.t(end); end
+if H5.haveOut && size(H5.AG, 1) == numel(H5.t) && any(H5.AG(:, 1))
+    nW5 = find(H5.AG(:, 1) ~= 0, 1) - 1;    % waiting steps (count)
+    eW5 = max(abs(H5.SI(1:nW5+1, 1:3) - q0(1:3).'), [], 'all');   % base read at steps 0..go (m, m, rad)
+    wW5 = max(abs(H5.W(1:nW5, :)), [], 'all');   % wheel_sent during the wait (rpm)
+    ch_ = isempty(H5.err) && abs(H5.t(end) - H1.t(end)) < 1e-9 && nW5 >= 10 && eW5 <= tolQ && wW5 == 0;
+end
+fprintf('(iii) h  h5 (READY at answer 11): returned %d, t_end %.3f s (h1 %.3f), waiting steps %d, max |base read - q0| over the wait %.3e (need <= %g), wheels during the wait %g -> %s\n', ...
+        H5.haveOut, tE5, H1.t(end), nW5, eW5, tolQ, wW5, mat2str(ch_));
+if ~isempty(H5.err), fprintf('         h5 stopped: %s\n', H5.err(1:min(end, 400))); end
+okIII = ca && cb && cc && cd_ && ce && cf && cg && ch_;
 if ~okIII
-    tags = {'a', 'b', 'c', 'd', 'e', 'f', 'g'};
-    fails{end+1} = sprintf('(iii) robot modes 2 and 3 against the fake robot: failed parts %s', strjoin(tags(~[ca cb cc cd_ ce cf cg]), ' '));
+    tags = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'};
+    fails{end+1} = sprintf('(iii) robot modes 2 and 3 against the fake robot: failed parts %s', strjoin(tags(~[ca cb cc cd_ ce cf cg ch_]), ' '));
 end
 
 % ---- (r) unwrap state reset between runs, normal and Fast Restart -----------------------------------------------------
-t = setfl(dc_set_mode(dcBase, 1), 4, '0');   % run_mode 1 (EnableMotive 1, emulator, EnableHardware 0), sensor_model 0
+t = dc_set_mode(dcBase, 1);                  % run_mode 1 (EnableMotive 1, emulator, EnableHardware 0)
 fid = fopen(dcf, 'w');  fwrite(fid, uint8(t));  fclose(fid);
-evalin('base', 'clear all');  clear define_constants;  rehash;
+fid = fopen(labf, 'w');  fwrite(fid, uint8(setfl(labBase, 4, '0')));  fclose(fid);   % sensor_model 0 (lab_settings.m since F14a)
+evalin('base', 'clear all');  clear define_constants lab_settings;  rehash;
 evalc('load_system(slx)');
 sim0 = get_param(blkM, 'SimulateUsing');
 set_param(blkM, 'System', 'MotiveDataCounting');  set_param(blkM, 'SimulateUsing', sim0);
 load_system('simulink');
 ssN = ['Enabled' newline 'Subsystem'];
-delete_line(mdl, 'MotiveEmulator/1', [ssN '/2']);
+delete_line(mdl, 'EmuDropout/1', [ssN '/2']);   % F6: EmuDropout sits between MotiveEmulator and the subsystem
 add_block('simulink/Sources/Clock', [mdl '/F7SweepClock']);
 add_block('simulink/User-Defined Functions/MATLAB Function', [mdl '/F7Sweep']);
 rt = sfroot;

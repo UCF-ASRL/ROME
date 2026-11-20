@@ -45,6 +45,8 @@ mkdir(tmp);
 copyfile(root, tmp);
 copyfile(fullfile(here, 'stubs', 'ROMECommand.m'), fullfile(tmp, 'ROMECommand.m'), 'f');
 copyfile(fullfile(here, 'stubs', 'MotiveData.m'),  fullfile(tmp, 'Optitrack', 'MotiveData.m'), 'f');
+prerun_fixture('signoff', tmp);             % wire3 fix 1: the InitFcn pre-run check needs the Part F date (copy only)
+dcfP = fullfile(tmp, 'define_constants.m');  dcP0 = fileread(dcfP);   % the copy's define_constants (case a writes run_mode 2)
 mdlcell = {mdl};                            % the model name as a cell, for the conditional close below
 cleanup = onCleanup(@() cellfun(@(c) c(), {@() cd(startdir), @() path(path0), ...
           @() cellfun(@(m) set_param(m, 'FastRestart', 'off'), mdlcell(bdIsLoaded(mdl))), ...
@@ -75,7 +77,11 @@ runs = {'a',  1, true,  Tlong, 'off', true;
 for r = 1:size(runs, 1)
     cs = runs{r,1};  hwv = runs{r,2};  keep = runs{r,3};  Tsim = runs{r,4};  preset = runs{r,5};  expect = runs{r,6};
     evalin('base', 'clear all');
-    load_system(fullfile(tmp, [mdl '.slx']));   % PostLoadFcn = define_constants: EnableHardware 0, pacing off
+    viaMode = hwv ~= 0 && keep;               % wire3 fix 1: the hardware run with the callbacks goes through run_mode 2 (robot, arm
+                                              % frozen, fake camera), the way a student selects it, so the pre-run check sees a real mode
+    dcT = dcP0;  if viaMode, dcT = dc_set_mode(dcP0, 2); end
+    fid = fopen(dcfP, 'w');  fwrite(fid, uint8(dcT));  fclose(fid);  clear define_constants;  rehash;
+    load_system(fullfile(tmp, [mdl '.slx']));   % PostLoadFcn = define_constants: EnableHardware 0 (1 via run_mode 2), pacing off
     set_param(mdl, 'StopFcn', '');
     if keep
         assert(contains(get_param(mdl, 'InitFcn'), 'apply_pacing') && contains(get_param(mdl, 'StartFcn'), 'apply_pacing'), ...
@@ -84,9 +90,14 @@ for r = 1:size(runs, 1)
         set_param(mdl, 'InitFcn', '');  set_param(mdl, 'StartFcn', '');   % callbacks disabled in the copy
     end
     set_param(mdl, 'EnablePacing', preset);     % the state the model is in when the student presses Run
-    assignin('base', 'EnableHardware', hwv);    % NOT through define_constants
+    if viaMode
+        set_param(mdl, 'EnablePacing', preset);  % define_constants (run_mode 2) already set pacing: put the preset back
+        prerun_fixture('park', tmp);            % the park record of these settings, as calibrateROMEArm writes it
+    else
+    assignin('base', 'EnableHardware', hwv);    % NOT through define_constants (cases with the callbacks removed, and simulation)
     assignin('base', 'run_mode_test_override', {'EnableHardware'});   % F12 fix round 1: set by hand, so arm_freeze_banner lets it differ from run_mode
     if hwv ~= 0, assignin('base', 'sensor_model', 0); end   % 0 exact state (flag): apply_pacing refuses a hardware run with SensorModel noise on (tested in d7)
+    end
     evalin('base', 'clear ukd_current');
     t0 = tic;
     sim(mdl, 'StopTime', num2str(Tsim), 'SimulationMode', 'normal', 'ReturnWorkspaceOutputs', 'on');
@@ -105,6 +116,7 @@ for r = 1:size(runs, 1)
         fails{end+1} = sprintf('%s: check gave %d, expected %d (EnableHardware=%d, callbacks kept=%d, pacing %s, wall %.2f s for %g s)', cs, ok, expect, hwv, keep, pac, wall, Tsim); %#ok<AGROW>
     end
 end
+fid = fopen(dcfP, 'w');  fwrite(fid, uint8(dcP0));  fclose(fid);  clear define_constants;  rehash;   % the copy's file back for the next cases
 
 % f, g: Fast Restart. Run 1 with EnableHardware = 0, then EnableHardware = 1 and run 2.
 frruns = {'f', true, true; 'g', false, false};   % case, callbacks kept?, refusal expected?

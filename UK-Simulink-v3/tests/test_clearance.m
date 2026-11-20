@@ -31,11 +31,12 @@ fails = {};                                 % one message per failed assertion (
 txt = fileread(fullfile(root, 'define_constants.m'));          % text of define_constants.m
 tkd = regexp(txt, '^d\s*=\s*([0-9.]+);', 'tokens', 'lineanchors');
 tkw = regexp(txt, '^w\s*=\s*([0-9.]+);', 'tokens', 'lineanchors');
-tks = regexp(txt, '^arm_sign\s*=\s*\[([^\]]*)\]', 'tokens', 'lineanchors');
-tko = regexp(txt, '^arm_offset_deg\s*=\s*\[([^\]]*)\]', 'tokens', 'lineanchors');
+lab = fileread(fullfile(root, 'lab_settings.m'));             % text of lab_settings.m (the arm map moved there, F14a)
+tks = regexp(lab, '^arm_sign\s*=\s*\[([^\]]*)\]', 'tokens', 'lineanchors');
+tko = regexp(lab, '^arm_offset_deg\s*=\s*\[([^\]]*)\]', 'tokens', 'lineanchors');
 tkh = regexp(txt, '^arm_home\s*=\s*deg2rad\(\[([^\]]*)\]\)', 'tokens', 'lineanchors');
 if numel(tkd) ~= 1 || numel(tkw) ~= 1 || numel(tks) ~= 1 || numel(tko) ~= 1 || numel(tkh) ~= 1
-    error('test_clearance:parse', 'define_constants.m: expected one each of d, w, arm_sign, arm_offset_deg, arm_home; found %d %d %d %d %d', ...
+    error('test_clearance:parse', 'define_constants.m / lab_settings.m: expected one each of d, w, arm_sign, arm_offset_deg, arm_home; found %d %d %d %d %d', ...
           numel(tkd), numel(tkw), numel(tks), numel(tko), numel(tkh));
 end
 opt = struct();                             % options of clearance_9dof

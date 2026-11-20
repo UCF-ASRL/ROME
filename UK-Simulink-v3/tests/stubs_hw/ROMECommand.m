@@ -90,6 +90,7 @@ classdef ROMECommand < matlab.System
                     obj.DeviceHandle = RobotLinkRecorder(obj.ESP32_IP, obj.ESP32_Port, "ConnectTimeout", 5);
                     pause(0.5);
                     write(obj.DeviceHandle, uint8(char("START_GV" + newline)));
+                    try, sendlogInit_(obj); sendlogAdd_(obj, char("START_GV" + newline)); catch, obj.sendlog_on_ = false; end % [sendlog] switch read and log start at the connect, then this line
                     disp('ROME Connected.');
                     obj.initial_run = false;
                 end
@@ -125,6 +126,7 @@ classdef ROMECommand < matlab.System
                         jointDeg(1), jointDeg(2), jointDeg(3), jointDeg(4), jointDeg(5), jointDeg(6));
                     
                     write(obj.DeviceHandle, uint8(msg));
+                    if obj.sendlog_on_, try, sendlogAdd_(obj, msg); catch, end, end % [sendlog] the line just written
                 end
                 
                 %------------------------------------------------------
@@ -189,14 +191,17 @@ classdef ROMECommand < matlab.System
             actualWheelRPM = obj.actualWheelRPM_;
             actualJointDeg = obj.actualJointDeg_;
             armReady       = obj.armReady_;
+            if obj.sendlog_on_, obj.sendlog_k_ = obj.sendlog_k_ + 1; end % [sendlog] steps completed since the connect step
         end
         
         %==============================================================
         % SHUTDOWN
         %==============================================================
         function releaseImpl(obj)
+            if obj.sendlog_on_, try, sendlogAtExit = onCleanup(@() sendlogDump_(obj)); catch, end, end %#ok<NASGU> [sendlog] dump when releaseImpl ends: after STOP_ALL and the close, also if that write fails
             if coder.target('MATLAB') && ~isempty(obj.DeviceHandle)
                 write(obj.DeviceHandle, uint8(char("STOP_ALL" + newline)));
+                if obj.sendlog_on_, try, sendlogAdd_(obj, char("STOP_ALL" + newline)); catch, end, end % [sendlog] the line just written
             end
             obj.DeviceHandle = [];
         end
@@ -220,4 +225,69 @@ classdef ROMECommand < matlab.System
             o1 = true; o2 = true; o3 = true;
         end
     end
+    %============================================================== [sendlog]
+    % SEND LOG (added 20 Nov 2026; every added line is marked [sendlog], no original line is changed). [sendlog]
+    % Each write above is followed by one log entry: the exact text written, the seconds since the connect [sendlog]
+    % and the step index. Preallocated buffer, no file I/O while running. When releaseImpl ends (after [sendlog]
+    % STOP_ALL and the close) the log goes to the base workspace as rome_send_log, which the RUN VERDICT [sendlog]
+    % reads (rome_run_finish.m). Off: romecommand_sendlog = 0 (lab_settings.m); absent = on. A log failure [sendlog]
+    % never stops a send: every call is inside try/catch. [sendlog]
+    %============================================================== [sendlog]
+    properties (Access = private) % [sendlog]
+        sendlog_on_ = false % [sendlog] logging on (flag): set at the connect from romecommand_sendlog
+        sendlog_n_ = 0 % [sendlog] entries used (count)
+        sendlog_k_ = 0 % [sendlog] steps completed since the connect step (count)
+        sendlog_t0_ = uint64(0) % [sendlog] tic at the connect
+        sendlog_tw_ = [] % [sendlog] seconds since the connect when each write returned (s)
+        sendlog_step_ = [] % [sendlog] step index of each write (count, 0 = connect step)
+        sendlog_line_ = {} % [sendlog] the text written, LF kept (cellstr)
+        sendlog_dt_ = NaN % [sendlog] step dt_9dof (s)
+        sendlog_err_ = '' % [sendlog] last logging error (char), never raised
+        sendlog_start_ = '' % [sendlog] wall clock at the connect (char)
+    end % [sendlog]
+    methods (Access = private) % [sendlog]
+        function sendlogInit_(obj) % [sendlog] at the connect: switch, buffer, clock
+            sw = 1; % [sendlog] romecommand_sendlog, absent = 1 (flag)
+            if evalin('base', 'exist(''romecommand_sendlog'',''var'')'), sw = evalin('base', 'romecommand_sendlog'); end % [sendlog]
+            obj.sendlog_on_ = ~isequal(sw, 0); % [sendlog]
+            if ~obj.sendlog_on_, return; end % [sendlog]
+            try, obj.sendlog_dt_ = evalin('base', 'dt_9dof'); catch, end % [sendlog]
+            N = 20000; % [sendlog] preallocated entries (count): 1000 s at 20 Hz; doubled if ever exceeded
+            obj.sendlog_tw_ = NaN(N, 1); obj.sendlog_step_ = NaN(N, 1); obj.sendlog_line_ = cell(N, 1); % [sendlog]
+            d = datetime('now'); d.Format = 'yyyy-MM-dd HH:mm:ss.SSS'; obj.sendlog_start_ = char(d); % [sendlog]
+            obj.sendlog_t0_ = tic; % [sendlog]
+        end % [sendlog]
+        function sendlogAdd_(obj, txt) % [sendlog] one entry, after a write returned
+            try % [sendlog]
+                n = obj.sendlog_n_ + 1; % [sendlog]
+                if n > numel(obj.sendlog_tw_) % [sendlog] longer than preallocated: double
+                    obj.sendlog_tw_(2*n, 1) = NaN; obj.sendlog_step_(2*n, 1) = NaN; obj.sendlog_line_{2*n, 1} = []; % [sendlog]
+                end % [sendlog]
+                obj.sendlog_tw_(n) = toc(obj.sendlog_t0_); % [sendlog]
+                obj.sendlog_step_(n) = obj.sendlog_k_; % [sendlog]
+                obj.sendlog_line_{n} = char(txt); % [sendlog]
+                obj.sendlog_n_ = n; % [sendlog]
+            catch e % [sendlog]
+                obj.sendlog_err_ = e.message; % [sendlog]
+            end % [sendlog]
+        end % [sendlog]
+        function sendlogDump_(obj) % [sendlog] once, when releaseImpl ends
+            try % [sendlog]
+                n = obj.sendlog_n_; % [sendlog]
+                if obj.sendlog_on_ && n > 0 % [sendlog]
+                    d = datetime('now'); d.Format = 'yyyy-MM-dd HH:mm:ss'; % [sendlog]
+                    S = struct('source', 'ROMECommand.m send log', 'start_wall', obj.sendlog_start_, 'dump_wall', char(d)); % [sendlog]
+                    S.tw = obj.sendlog_tw_(1:n); % [sendlog] seconds since the connect when each write returned (s)
+                    S.step = obj.sendlog_step_(1:n); % [sendlog] steps since the connect step (count)
+                    S.ts = S.step * obj.sendlog_dt_; % [sendlog] simulation time from the step index (s; connect step = t 0)
+                    S.line = obj.sendlog_line_(1:n); % [sendlog] the text written, LF kept (cellstr)
+                    S.err = obj.sendlog_err_; % [sendlog]
+                    assignin('base', 'rome_send_log', S); % [sendlog]
+                end % [sendlog]
+            catch e % [sendlog]
+                try, warning('ROMECommand:sendlog', 'send log not saved: %s', e.message); catch, end % [sendlog]
+            end % [sendlog]
+            obj.sendlog_on_ = false; % [sendlog] dumped once
+        end % [sendlog]
+    end % [sendlog]
 end

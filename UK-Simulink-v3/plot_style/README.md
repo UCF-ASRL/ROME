@@ -3,7 +3,7 @@
 Copies of the author's house figure style, unchanged, so that `fig_9dof_cases.m` runs from the lab repo
 without the author's review folder.
 
-Source: `Research/plot_style/` of the author's review tree (`C:\Users\belmo\OneDrive\Joao M. R. Belmonte\UCF\Research\plot_style`),
+Source: `Research/plot_style/` of the author's review tree (not in this repository),
 copied 19 November 2026. The rules are in `PLOT_STYLE_RULES.md` there (not copied; no code needs it).
 
 | File | SHA-256 | Called by |

@@ -49,7 +49,7 @@ function varargout = test_hw_nocam(brk)
 %     (ii) hw: pacing on: wall-clock span between the first and the last ROME line >= 0.9 x their simulated
 %          span (compilation excluded), and EnablePacing 'on' at PacingRate 1 after the run.
 %     (iii) hw: every sent wheel |w| <= max_rpm and every sent joint inside the firmware window minus the
-%          margin, limits taken from ROME_merged/define_constants.m (the user's file, not the run's
+%          margin, limits taken from ROME_merged/lab_settings.m (the TA file since F14a; not the run's
 %          workspace, so a broken copy cannot move its own oracle).
 %     (iv) hw: sensor_model is effectively 0: the logged q_meas equals q_cmd one step late exactly, with
 %          q_meas(t=0) = q0_9dof, and sensor_model = 0 in the workspace; and MotiveData's openSocket was
@@ -96,7 +96,7 @@ B(end+1,:) = {'mf_ii_pacing', 'ii', {{'apply_pacing.m', 'state = {''off'', ''on'
                                      {'apply_pacing.m', 'if live && ~(strcmp(got, ''on'') && isequal(double(rate), 1))', 'if false'}}, ...
     'apply_pacing turns pacing off for a hardware run and does not refuse it: commands stream faster than real time'};
 B(end+1,:) = {'mf_iii_joint', 'iii', {{'ROMECommand.m', 'if obj.has_arm_clamp_', 'if false'}, ...
-                                      {'define_constants.m', 'arm_offset_deg = [ 0 180  90   0   0   0];', 'arm_offset_deg = [ 0 180 150   0   0   0];'}}, ...
+                                      {'lab_settings.m', 'arm_offset_deg = [ 0 180  90   0   0   0];', 'arm_offset_deg = [ 0 180 150   0   0   0];'}}, ...
     'firmware clamp skipped and J3 offset 60 deg off: J3 is sent past the firmware window'};
 B(end+1,:) = {'mf_iii_wheel', 'iii', {{'chart', 'CommandGuard', 'lim  = abs(max_rpm);', 'lim  = 10*abs(max_rpm);'}, ...
                                       {'define_constants.m', 'speed_factor = 1.0;', 'speed_factor = 2.0;'}}, ...
@@ -105,7 +105,7 @@ B(end+1,:) = {'mf_iv_sensor', 'iv', {{'define_constants.m', '    sensor_model = 
                                      {'apply_pacing.m', '    if ~smok', '    if false'}}, ...
     'sensor_model left on in a hardware run (override and refusal both removed): synthetic noise in the state the controller reads'};
 B(end+1,:) = {'mf_iv_motive', 'iv', {{'emrun', 1}, ...
-                                     {'define_constants.m', '    ''measured'', false);', '    ''measured'', true);'}, ...
+                                     {'lab_settings.m', '    ''measured'', false);', '    ''measured'', true);'}, ...
                                      {'srcrun', 'optitrack'}}, ...
     'EnableMotive = 1: the MotiveData block runs and opens its socket (counted, no network). F5b: motive_cal.measured = true too, else motive_cal_check refuses the hardware runs before the reader runs. F7: motive_source = ''optitrack'' too, else the reader stays shut (emulator). {''emrun'', 1}: the runs keep EnableMotive = 1 instead of the forced 0'};
 B(end+1,:) = {'mf_vi_noswitch', 'vi', {{'tool', 'bypass'}}, ...
@@ -172,17 +172,18 @@ end
 fprintf('stub identity: %s = %s with %d replacements, %d bytes, byte-identical\n', stubf, realf, size(rep, 1), numel(stubtxt));
 assert(isempty(regexp(stubtxt, 'tcpclient\s*\(', 'once')), 'test_hw_nocam:network', 'the stub still calls tcpclient');
 
-% ---- 2. limits and map from the user's define_constants.m (independent of any break) ------------------------
-dc0 = fileread(fullfile(root, 'define_constants.m'));   % ROME_merged/define_constants.m text (char)
+% ---- 2. limits and map from the user's lab_settings.m (independent of any break; F14a: moved there from the
+% user block of define_constants.m) ------------------------------------------------------------------------------
+dc0 = fileread(fullfile(root, 'lab_settings.m'));   % ROME_merged/lab_settings.m text (char)
 L = struct();                                 % user-block values: max_rpm (rpm), arm_* (deg or sign); arm_freeze is derived from run_mode since F12 (not read here, unused)
 for nm = {'max_rpm', 'arm_sign', 'arm_offset_deg', 'arm_fw_switch', 'arm_fw_other', 'arm_fw_margin_deg'}
     tok = regexp(dc0, ['(?m)^' nm{1} '\s*=\s*([^;%]+);'], 'tokens');   % right-hand side of the one user-block line
-    assert(numel(tok) == 1, 'test_hw_nocam:dc', '%s: %d user-block lines in define_constants.m (expected 1)', nm{1}, numel(tok));
+    assert(numel(tok) == 1, 'test_hw_nocam:dc', '%s: %d lines in lab_settings.m (expected 1)', nm{1}, numel(tok));
     L.(nm{1}) = eval(tok{1}{1});
 end
 fwLo = min(L.arm_fw_switch, L.arm_fw_other) + L.arm_fw_margin_deg;   % 1x6 lowest joint command allowed (firmware deg)
 fwHi = max(L.arm_fw_switch, L.arm_fw_other) - L.arm_fw_margin_deg;   % 1x6 highest joint command allowed (firmware deg)
-fprintf('limits from %s: max_rpm %g rpm, joint windows lo %s hi %s deg (margin %g)\n', fullfile(root, 'define_constants.m'), ...
+fprintf('limits from %s: max_rpm %g rpm, joint windows lo %s hi %s deg (margin %g)\n', fullfile(root, 'lab_settings.m'), ...
         L.max_rpm, mat2str(fwLo), mat2str(fwHi), L.arm_fw_margin_deg);
 
 % ---- 3. temporary copy ------------------------------------------------------------------------------------
@@ -192,6 +193,7 @@ path0 = path;                                 % MATLAB path at entry, restored a
 if bdIsLoaded(mdl), close_system(mdl, 0); end
 mkdir(tmp);
 copyfile(root, tmp);
+prerun_fixture('signoff', tmp);              % F2 wiring: Part F/C sign-off dates in the COPY's lab_settings.m (prerun_check refuses robot runs without)
 copyfile(stubf, fullfile(tmp, 'ROMECommand.m'), 'f');
 copyfile(fullfile(stubdir, 'RobotLinkRecorder.m'),  fullfile(tmp, 'RobotLinkRecorder.m'), 'f');
 copyfile(fullfile(stubdir, 'MotiveDataCounting.m'), fullfile(tmp, 'MotiveDataCounting.m'), 'f');
@@ -269,8 +271,10 @@ end
 % ---- 5. the four runs -----------------------------------------------------------------------------------------
 dcf = fullfile(tmp, 'define_constants.m');    % the copy's define_constants.m (char)
 fid = fopen(dcf, 'r');  dcBase = char(fread(fid, Inf, '*uint8').');  fclose(fid);   % after the break (char)
-nSM = numel(strfind(dcBase, [lf 'sensor_model = 1;']));     % user-block sensor line (count), must be 1
-assert(nSM == 1, 'test_hw_nocam:dc', 'copy define_constants.m: ''sensor_model = 1;'' x%d (expected 1)', nSM);
+labf = fullfile(tmp, 'lab_settings.m');      % the copy's lab_settings.m (char; F14a: sensor_model moved there)
+fid = fopen(labf, 'r');  labBase = char(fread(fid, Inf, '*uint8').');  fclose(fid);   % after the break (char)
+nSM = numel(strfind(labBase, [lf 'sensor_model = 1;']));    % the sensor line (count), must be 1
+assert(nSM == 1, 'test_hw_nocam:dc', 'copy lab_settings.m: ''sensor_model = 1;'' x%d (expected 1)', nSM);
 % F12: EnableHardware / EnableMotive / motive_source / arm_freeze come from run_mode; dc_set_mode count-asserts the
 % run_mode line and adds TEST OVERRIDE lines for what no mode gives (EnableMotive = 0 is this test's regression path).
 if isfile(cntf), delete(cntf); end
@@ -283,12 +287,14 @@ for r = 1:size(cfg, 1)
     if ~EH, nRun = 1; elseif AF, nRun = 2; else, nRun = 3; end   % run mode with this EnableHardware and arm_freeze (fake camera)
     if strcmp(srcRun, 'optitrack') && EH && ~AF, nRun = 4; end
     txt = dc_set_mode(dcBase, nRun, struct('EnableHardware', EH, 'EnableMotive', emRun, 'motive_source', srcRun, 'arm_freeze', AF));
-    if ~EH, txt = strrep(txt, [lf 'sensor_model = 1;'],  [lf 'sensor_model = 0;']); end   % (counted once above)
+    lab = labBase;                            % the copy's lab_settings.m for this run (char)
+    if ~EH, lab = strrep(lab, [lf 'sensor_model = 1;'],  [lf 'sensor_model = 0;']); end   % (counted once above)
     fid = fopen(dcf, 'w');  fwrite(fid, uint8(txt));  fclose(fid);
+    fid = fopen(labf, 'w');  fwrite(fid, uint8(lab));  fclose(fid);
     if isfile(recf), delete(recf); end
     assert(~isfile(recf), 'test_hw_nocam:rec', 'record file %s could not be cleared', recf);
     evalin('base', 'clear all');
-    clear define_constants
+    clear define_constants lab_settings
     rehash;
     load_system(fullfile(tmp, [mdl '.slx']));   % PostLoadFcn = define_constants of the copy
     assert(isequal(evalin('base', 'EnableHardware'), EH), 'test_hw_nocam:dc', '%s: EnableHardware = %g after load, expected %d', nm, evalin('base', 'EnableHardware'), EH);
@@ -312,6 +318,7 @@ for r = 1:size(cfg, 1)
         add_line(mdl, 'Clock9/1', 'HwNocamErrAt/1');
         add_line(mdl, 'HwNocamErrAt/1', 'HwNocamInjectedError/1');
     end
+    prerun_fixture('park', tmp);             % F2/F11 wiring: park record of the copy's settings, as calibrateROMEArm writes it
     evalin('base', 'clear ukd_current');
     err = '';  haveOut = false;  out = [];    % error text of sim (char), sim returned (logical), its output
     simtxt = '';                              % Command Window text of the sim, incl. the InitFcn banner (char)

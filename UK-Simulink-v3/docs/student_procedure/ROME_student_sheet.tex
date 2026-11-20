@@ -1,0 +1,321 @@
+% ROME student sheet (focus plan F14b, 20 Nov 2026). DRAFT. At most six pages (check_procedure.py C7).
+% The short sheet a student follows at the robot: one card per mode, in run order. Everything else (setup, sign-offs,
+% lab_settings.m, troubleshooting, the run plan, provenance) is in the TA manual, ROME_TA_manual.tex.
+% Packages are limited to the Plan 3 set. Run check_procedure.py (python -I -X utf8) after every edit.
+% Provenance rules (as in the TA manual):
+%   * every number in the text is on number_allowlist.tsv with a file:line citation, or sits inside \todo{...};
+%   * \src{path:lines} cites the code line behind a statement. This sheet is built with \showsrcfalse, so the
+%     citations are checked by check_procedure.py (C4, citation_lock.tsv) but NOT printed (F13 finding 22);
+%   * review documents are cited on comment lines of their own that start with "review-src:".
+% The placeholders for the expected results (table and figure, focus plan F14c) are boxes of about the size the
+% generated table and figure will take, so the page count measured today holds once F14c fills them.
+\documentclass[10pt]{article}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{siunitx}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usepackage{hyperref}
+
+\setlength{\textwidth}{7in}
+\setlength{\oddsidemargin}{-0.25in}
+\setlength{\evensidemargin}{-0.25in}
+\setlength{\textheight}{9.4in}
+\setlength{\topmargin}{-0.7in}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+\setlength{\emergencystretch}{3em}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+% Let the Mode 1 table and figure share a page with text (no page of floats alone).
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.9}
+\renewcommand{\textfraction}{0.05}
+
+% ---------------------------------------------------------------- macros (same as the TA manual)
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[#1]}}}
+\ExplSyntaxOn
+\cs_new_protected:Npn \romecode #1
+  {
+    \str_map_inline:nn {#1}
+      {
+        ##1
+        \str_if_in:nnT { /_;:,. } {##1} { \penalty 50 \relax }
+      }
+  }
+\ExplSyntaxOff
+\newcommand{\cmd}[1]{\texttt{\romecode{#1}}}
+\newcommand{\out}[1]{\texttt{\romecode{#1}}}
+\newif\ifshowsrc
+\showsrcfalse
+% Hidden on this sheet: \unskip removes the space before it, so no stray space is printed before a full stop.
+\newcommand{\src}[1]{\ifshowsrc{\scriptsize\,[\texttt{\romecode{#1}}]}\else\unskip\fi}
+\newcommand{\expect}{\par\textit{You see:}\ }
+% A framed box the width of the text.
+\newcommand{\framed}[1]{\par\smallskip\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}{#1}}\par\smallskip}
+% The TA's sign-off box at the top of a card.
+\newcommand{\prereq}[1]{\framed{\textbf{TA signs before you start this card.} #1}}
+% What success looks like, and what to do otherwise, at the end of a card.
+\newcommand{\success}[2]{\framed{\textbf{Success:} #1\\\textbf{Otherwise:} #2}}
+% A placeholder of a fixed size for a generated table or figure that does not exist yet (F14c).
+% #3 is the \todo{BLOCKED: ...} itself, so check_procedure.py C2 sees it in the \IfFileExists fallback.
+\newcommand{\placeholder}[3]{\fbox{\parbox[c][#2][c]{#1}{\centering #3}}}
+% Numbered steps of a card; the numbering restarts on every card.
+\newlist{steps}{enumerate}{1}
+\setlist[steps]{label=\arabic*., leftmargin=*, itemsep=2pt, topsep=2pt}
+
+\title{\vspace{-1.2cm}ROME robot: student sheet}
+\author{Spacecraft simulation laboratory}
+\date{DRAFT, 20 November 2026}
+
+\begin{document}
+\frenchspacing
+\maketitle
+\vspace{-0.6cm}
+
+% What a robot card says about the verdict line (the same on modes 2, 3 and 4).
+\newcommand{\verdictstep}[1]{\item \textbf{Read the result.} Within about \SI{10}{\second} of the stop MATLAB prints a
+  line that begins \out{RUN VERDICT mode #1:} \src{rome_run_end.m:14; run_verdict_core.m:161} On \out{FAIL} or
+  \out{INCOMPLETE}: start nothing else, show the line to the TA, and go on only when the TA says so. No such line within
+  about \SI{10}{\second}: call the TA.}
+% The calibration step, written out on every robot card (no pointer to another card).
+% Success is judged by the park-record line only (clarity audit A2): the "successfully completed" line is not used.
+\newcommand{\calibbody}{The arm moves now, on every card: each joint drives into its limit switch. Clear zone around the
+  arm empty; your partner's hand on the power cut-off; only the power cut stops a calibration. Type
+  \cmd{calibrateROMEArm;} and wait; it can take up to three minutes \src{calibrateROMEArm.m:42; calibrateROMEArm.m:11; calibrateROMEArm.m:133}.
+  \textbf{Success:} near the end MATLAB prints \out{Park record written (entry <n>)} \src{calibrateROMEArm.m:216}. If it
+  prints \out{NO park record written} \src{calibrateROMEArm.m:218} or \out{DO NOT run a robot mode}
+  \src{calibrateROMEArm.m:192}, or the arm does not look like the text under \out{Expected posture}
+  \src{calibrateROMEArm.m:189-190}, stop and call the TA. Never move a joint yourself (\cmd{jog_joint}, \cmd{jogROMEArm}):
+  that is a TA action \src{calibrateROMEArm.m:193}.}
+% Placement with the power off (author, 20 Nov 2026: "Power off to place").
+\newcommand{\placebody}[1]{\textbf{Place the robot with its power off.} Your partner turns the robot's power off with
+  the switch the TA showed you; the motors then have no power. Push it by hand #1 Then your partner turns the power on.
+  Before you calibrate, check that the lab PC is still on the robot's Wi-Fi (the TA shows you where) \src{docs/lab/PART_F_BENCH_CHECKLIST.md:66}.
+  \todo{NOT VERIFIED: whether the power switch also turns off the robot's Wi-Fi, Part F item 25c}}
+
+% =====================================================================================
+\section*{How to use this sheet}
+Do the cards in order: Mode 1, then Mode 2, then Mode 3, then Mode 4. Each card is one run, and its steps are in the
+order you do them: set the mode, place the robot, calibrate the arm, Run, read the result, save. Start a card only
+after the TA has signed its box. The TA has a separate manual with everything else.
+% review-src: docs/superpowers/plans/2026-11-19-case1-three-modes.md:87
+
+Type every command exactly as printed, including the semicolon at the end where there is one. Two kinds of lines are expected and can be
+ignored: the warning \out{The orbit exceeds a 2m x 2m area!} \src{define_constants.m:335}, and at the Run the lines
+that begin \out{*** ARM FROZEN} or \out{*** ARM WILL MOVE} \src{arm_freeze_banner.m:144; arm_freeze_banner.m:147}.
+
+\textbf{You do not edit files.} You set the mode by typing \cmd{rome_mode(n);} (or click the \textbf{Mode n} button at
+the top of the model) \src{tools/wire_run_mode_buttons.m:38}. Only if the TA asks: type \cmd{edit define_constants},
+change \cmd{speed_factor} or \cmd{size_factor} \src{define_constants.m:8-11}, save (Ctrl+S), and start again at the
+Mode 1 card.
+
+\framed{\textbf{Red text, an error window, or an orange warning this sheet does not tell you to expect: stop and call
+the TA.} Do not try to work around it. The common ones: \out{Run refused.} or \out{PRERUN CHECK mode <n>: REFUSED}
+(the robot is not ready) \src{prerun_check.m:101; prerun_check.m:103}; \out{Failed to establish TCP connection} (no
+link to the robot) \src{calibrateROMEArm.m:44}; \out{Calibration timeout} \src{calibrateROMEArm.m:113};
+\out{READY status not confirmed by Teensy.} \src{calibrateROMEArm.m:202}; \out{stop it before changing the run mode}
+\src{rome_mode.m:23}.}
+% review-src: TRACKER.md section 0
+
+\subsection*{Safety}
+\begin{itemize}[leftmargin=*, itemsep=1pt, topsep=1pt]
+  \item Work in pairs. During every motion your partner keeps a hand on the robot's power cut-off and you are at the
+  keyboard \src{docs/lab/PART_F_BENCH_CHECKLIST.md:18}.
+  \todo{BLOCKED: where the power cut-off is, Part F item 25c}
+  \item Keep the clear zone around the arm empty while the arm has power
+  \src{docs/lab/PART_F_BENCH_CHECKLIST.md:20}. Stay clear below the arm when the power is cut: whether it holds or
+  falls without power is not known \src{docs/lab/PART_F_BENCH_CHECKLIST.md:21}.
+  \todo{BLOCKED: clear-zone radius and arm behaviour on power loss, Part F items 24d and 25c}
+  \item \textbf{To stop:} (a) press \textbf{Stop} in Simulink; that sends the stop command to the robot
+  \src{ROMECommand.m:197-200}. (b) If anything still moves, cut the power.
+  \item \textbf{During arm calibration only the power cut stops the arm.} Nothing you type stops it
+  \src{UK-Arduino/ROME_Teensy_Code/ROME_Teensy_Code.ino:160-163}.
+  \item \textbf{Never move a joint yourself} (\cmd{jog_joint}, \cmd{jogROMEArm}). Moving a joint is a TA action, also
+  when MATLAB prints a joint problem \src{calibrateROMEArm.m:193}. Call the TA.
+  \item After any stop, start nothing (no run, no calibration, no joint move) until the TA says so: the arm moves
+  again on the next joint command \src{UK-Arduino/ROME_Teensy_Code/ROME_Teensy_Code.ino:181-188}. After a power cut
+  the arm must be calibrated again \src{UK-Arduino/ROME_Teensy_Code/ROME_Teensy_Code.ino:52}. Tell the TA about every
+  stop, with the time and what you saw.
+\end{itemize}
+% review-src: TRACKER.md section 0, row 19 Nov "Arm does not stay stopped after STOP_ALL"; TRACKER.md section 0, row 19 Nov "Nothing but the power cut"
+
+\subsection*{Words used on this sheet}
+\begin{description}[leftmargin=0pt, itemsep=0pt, topsep=1pt, font=\normalfont\bfseries]
+  \item[Base, arm, end effector, orbit.] ROME is a four-wheeled base that carries a six-joint arm (joints J1 to J6).
+  The end effector is the tool at the end of the arm. The model commands only the end effector: it follows an orbit,
+  the path of a spacecraft around a target scaled down to the floor. The controller shares that motion between the
+  base and the arm \src{lab_settings.m:23-28}.
+  \item[Run mode.] Which of four ways the model runs (the cards below).
+  \item[Model.] The Simulink model \cmd{ROME_9DOF.slx}.
+  \item[Fake camera.] With the camera off, the model sends its own predicted base pose through the camera's software
+  path. Nothing measures where the real base is \src{run_mode_table.m:7}.
+  \item[Start card.] The block headed \out{PLACE THE ROBOT LIKE THIS} that MATLAB prints after a mode is set: the base
+  position $x$, $y$ in metres, the yaw (the heading of the base) in degrees, and the six arm angles
+  \src{define_constants.m:318-324}.
+  \item[Calibration, limit switch.] \cmd{calibrateROMEArm} drives every joint to its limit switch (a switch at the end
+  of the joint's travel, which tells the arm where it is) and then parks the arm at the start posture
+  \src{calibrateROMEArm.m:1}.
+  \item[Verdict line.] After a robot run MATLAB prints a line that begins \out{RUN VERDICT mode}, then the mode and
+  \out{PASS}, \out{FAIL} or \out{INCOMPLETE}, and one line per item below it \src{run_verdict_core.m:149-162}.
+\end{description}
+
+\subsection*{Start of the session}
+\begin{steps}
+  \item Start MATLAB R2026a (the TA shows you which icon). Type \cmd{cd '<path the TA wrote on the board>'} and press
+  Enter.
+  \todo{BLOCKED: path of the model folder on the lab PC}
+% review-src: TRACKER.md section 2, 19 Nov "Lab PC, R2026a"
+\end{steps}
+% The model is opened in the Run step of the robot cards, after calibrateROMEArm has put Optitrack/ on the path
+% (calibrateROMEArm.m:19); opened by hand before that, MATLAB warned that the System object MotiveData cannot be found
+% (F13 walkthrough finding 14). TA manual, sec:cards.
+
+% =====================================================================================
+\section*{Mode 1: simulation only}
+\textit{Nothing is sent to the robot. Only MATLAB runs.} \src{run_mode_table.m:30}
+\prereq{Nothing to sign for this card.}
+\begin{steps}
+  \item \textbf{Set the mode.} Type \cmd{rome_mode(1);}
+  \expect last, \out{rome_mode: MODE 1: Simulation only (end-effector dynamics sim, pose data from sim)}
+  \src{rome_mode.m:51; run_mode_table.m:30}.
+  \item \textbf{Run.} Type \cmd{check_9dof;} It simulates the run and checks it \src{check_9dof.m:1-7}.
+  \item \textbf{Read the result.} Near the end MATLAB prints \out{RESULT: PASS} between two lines of \out{=}
+  \src{check_9dof.m:254-260}. Write down the number in the line \out{base travels to ... m from the origin} for the TA
+  \src{check_9dof.m:251}.
+  \item \textbf{Look at the path.} Type \cmd{plot_9dof;} It opens many figures; look only at the one titled
+  \out{Desired vs. Tracked Position}, with a blue circle labelled \out{Focus}: the tracked path lies on the desired one
+  \src{plotting.m:63-64; plotting.m:76}. With the default \cmd{speed_factor} and \cmd{size_factor}, compare it with
+  Figure~\ref{fig:expected1} and the numbers \cmd{check_9dof} printed with Table~\ref{tab:expected}; while they are
+  empty boxes, skip the comparison.
+  \item \textbf{Save.} Type \cmd{save_run;} It saves the run that \cmd{plot_9dof} made and prints \out{save_run:} and
+  the file name \src{save_run.m:95}. Write the file name in the lab notebook.
+\end{steps}
+\success{\out{RESULT: PASS}, and the tracked path lies on the desired path.}{call the TA (TA manual,
+``Troubleshooting'').}
+
+% Not floats: the table and the figure stay inside the Mode 1 card (numbered by hand with \refstepcounter).
+\par\medskip\noindent
+\begin{minipage}[t]{0.55\linewidth}\centering
+  \refstepcounter{table}\label{tab:expected}Table~\thetable: Expected results (mode 1), default settings.\\[3pt]
+  \IfFileExists{generated/expected_results.tex}{\input{generated/expected_results.tex}}{\placeholder{0.95\linewidth}{2.2in}{\todo{BLOCKED: generated from the model (the paper's results table, per case)}}}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.42\linewidth}\centering
+  \refstepcounter{figure}\label{fig:expected1}Figure~\thefigure: Expected path of case 1.\\[3pt]
+  \IfFileExists{figures/fig_9dof_case_1_path.pdf}{\includegraphics[width=0.95\linewidth]{figures/fig_9dof_case_1_path.pdf}}{\placeholder{0.95\linewidth}{2.2in}{\todo{BLOCKED: expected path figure of case 1, generated from the model}}}
+\end{minipage}
+% provenance: fig_9dof_cases.m:10-11 (file names). The other cases are in the TA manual.
+
+% =====================================================================================
+\clearpage
+\section*{Mode 2: ground vehicle moving, frozen arm, camera off}
+\textit{The base drives. The arm stays parked at its start posture, so the end effector is not tracked: this is a
+base-path test (only the path of the base is checked).} \src{run_mode_table.m:31; tools/wire_motive_emulator.m:70}
+% review-src: TRACKER.md section 2, 19 Nov "Mode 2 is the base-path test, as built"
+\prereq{Full Part F: the whole bench checklist is signed \src{docs/lab/PART_F_BENCH_CHECKLIST.md:277}. The TA has shown
+you the power cut-off, set \cmd{speed_factor} for a first run, and connected the lab PC to the robot's network. The
+Mode 1 card passed with the same settings.}
+% review-src: TRACKER.md section 2, 19 Nov "Q-P4-a answered"
+\begin{steps}
+  \item \textbf{Set the mode.} Type \cmd{rome_mode(2);} (or click the \textbf{Mode 2} button at the top of the model).
+  \expect last, \out{rome_mode: MODE 2: ground vehicle moving, frozen arm, camera off (fake camera)}, and the start
+  card above it \src{rome_mode.m:51; run_mode_table.m:31}.
+  \item \textbf{Clear the floor.} Clear the area the TA marks for the run. Nobody and nothing inside it.
+  \item \placebody{to the spot and heading the TA marked; close by eye is enough.}
+  \item \textbf{Calibrate the arm.} \calibbody
+  \item \textbf{Change nothing now.} Do not edit a file, type \cmd{rome_mode}, or click anything on the model except
+  Run. If you did, calibrate again.
+% review-src: TRACKER.md section 3, Q-F11-b
+  \item \textbf{Run.} If the model is not open, type \cmd{open_system('ROME_9DOF')}. Your partner's hand on the power
+  cut-off; tell your partner, then press \textbf{Run}. Before the robot moves MATLAB prints
+  \out{PRERUN CHECK mode 2: PASS}; the words \out{UNSOURCED} and \out{Not enforced} on these lines are normal. If it
+  prints \out{REFUSED}, nothing moves: call the TA \src{prerun_check.m:95-101}. Watch the robot for the whole run.
+  Stop (Safety) if any part comes near the edge of the marked area, if the arm moves, or if anything looks wrong. The
+  run stops by itself at the end of the path and sends the stop command \src{ROMECommand.m:197-200}.
+  \verdictstep{2}
+  \item \textbf{Save.} Type \cmd{save_run;} The run was already saved at its end.
+  \expect \out{save_run: already saved at the end of the run:} and the file name \src{save_run.m:119}. Write the
+  file name in the lab notebook.
+\end{steps}
+\success{\out{RUN VERDICT mode 2: PASS}, the base drove its path, and the arm did not move.}{\out{FAIL} or
+\out{INCOMPLETE}: show the line to the TA (TA manual, ``Reading the verdict line'').}
+
+% =====================================================================================
+\clearpage
+\section*{Mode 3: ground vehicle moving, moving arm, camera off}
+\textit{The base and the arm move and the tool follows the orbit. The fake camera gives the base pose; the controller
+reads the real arm angles.} \src{run_mode_table.m:32; tools/wire_motive_emulator.m:70}
+\prereq{Full Part F signed, including its joint-map test (it checks that the arm's joints J2, J5 and J6 turn the way
+the model believes) \src{docs/lab/PART_F_BENCH_CHECKLIST.md:180; docs/lab/PART_F_BENCH_CHECKLIST.md:192}. The lab PC is
+on the robot's network. The TA accepted your Mode 2 run.}
+\begin{steps}
+  \item \textbf{Set the mode.} Type \cmd{rome_mode(3);} (or click the \textbf{Mode 3} button at the top of the model).
+  \expect last, \out{rome_mode: MODE 3: ground vehicle moving, moving arm, camera off (fake camera)}
+  \src{rome_mode.m:51; run_mode_table.m:32}.
+  \item \textbf{Clear the floor} the TA marks. Nobody and nothing inside it.
+  \item \placebody{to the spot and heading the TA marked; close by eye is enough.}
+  \item \textbf{Calibrate the arm.} \calibbody
+  \item \textbf{Change nothing now.} Do not edit a file, type \cmd{rome_mode}, or click anything on the model except
+  Run. If you did, calibrate again.
+  \item \textbf{Run.} If the model is not open, type \cmd{open_system('ROME_9DOF')}. Your partner's hand on the power
+  cut-off; tell your partner, then press \textbf{Run}. Before the robot moves MATLAB prints
+  \out{PRERUN CHECK mode 3: PASS}; the words \out{UNSOURCED} and \out{Not enforced} on these lines are normal. If it
+  prints \out{REFUSED}, nothing moves: call the TA \src{prerun_check.m:95-101}. The robot may then wait a few seconds
+  before it starts \src{allowed_ranges.m:148}. Watch for the whole run. Stop (Safety) if any part comes near the edge
+  of the marked area, if the tool heads toward the base or the floor, or if anything looks wrong.
+  \verdictstep{3}
+  \item \textbf{Save.} Type \cmd{save_run;}
+  \expect \out{save_run: already saved at the end of the run:} and the file name \src{save_run.m:119}. Write the
+  file name in the lab notebook.
+\end{steps}
+\success{\out{RUN VERDICT mode 3: PASS (1 item(s) not judged: UNSOURCED)} \src{run_verdict_core.m:160-161} (the
+UNSOURCED part is expected today), and the tool followed the orbit.}{\out{FAIL} or \out{INCOMPLETE}: show the line to
+the TA (TA manual, ``Reading the verdict line'').}
+
+% =====================================================================================
+\clearpage
+\section*{Mode 4: ground vehicle moving, moving arm, camera on}
+\textit{Mode 3 with the real OptiTrack cameras: they see markers on the robot and report where it really is on the
+floor.} \src{run_mode_table.m:33; lab_settings.m:39-43}
+\prereq{Full Part F signed, and also the lab-frame checklist, Part C, with the camera calibration
+\src{lab_settings.m:44-48}. The lab PC is on the robot's network and the camera stream. The TA accepted your Mode 3
+run.}
+\begin{steps}
+  \item \textbf{Set the mode.} Type \cmd{rome_mode(4);} (or click the \textbf{Mode 4} button at the top of the model).
+  \expect as the last line,\\\out{rome_mode: MODE 4: ground vehicle moving, moving arm, camera on (OptiTrack)}
+  \src{rome_mode.m:51; run_mode_table.m:33}. If the camera calibration is missing, Mode 4 is refused and the previous
+  mode is set back \src{rome_mode.m:36-47}: stop and call the TA.
+  \item \textbf{Clear the floor} around the taped origin, as the TA marks it. Keep the camera area clear: a person in
+  it can hide the markers \src{docs/lab/PART_I_RUN_PLAN.md:123}.
+  \item \placebody{onto the taped start mark of case 1, its heading on the heading line. If the start card and the label
+  of the mark disagree, or a mark is missing or loose, call the TA \src{docs/lab/PART_C_LAB_VISIT.md:192}.}
+  \todo{BLOCKED: placement tolerance, and which point of the base goes on the mark (Part C C9.5)}
+  \item \textbf{Calibrate the arm.} \calibbody
+  \item \textbf{Change nothing now.} Do not edit a file, type \cmd{rome_mode}, or click anything on the model except
+  Run. If you did, calibrate again.
+  \item \textbf{Run.} If the model is not open, type \cmd{open_system('ROME_9DOF')}. Your partner's hand on the power
+  cut-off; tell your partner, then press \textbf{Run}. Before the robot moves MATLAB prints
+  \out{PRERUN CHECK mode 4: PASS}; the words \out{UNSOURCED} and \out{Not enforced} on these lines are normal. If it
+  prints \out{REFUSED}, nothing moves: call the TA \src{prerun_check.m:95-101}. The robot may then wait a few seconds
+  before it starts \src{allowed_ranges.m:145; allowed_ranges.m:148}. Watch for the whole run. Stop (Safety) if the
+  cameras lose the robot, if any part comes near the edge of the marked area, if the tool heads toward the base or the
+  floor, or if anything looks wrong \src{docs/lab/PART_I_RUN_PLAN.md:123}.
+  \verdictstep{4}
+  \item \textbf{Save.} Type \cmd{save_run;}
+  \expect \out{save_run: already saved at the end of the run:} and the file name \src{save_run.m:119}. Write the
+  file name in the lab notebook.
+\end{steps}
+\success{\out{RUN VERDICT mode 4: PASS (1 item(s) not judged: UNSOURCED)} \src{run_verdict_core.m:160-161} (the
+UNSOURCED part is expected today), and the tool followed the orbit.}{\out{FAIL} or \out{INCOMPLETE}: show the line to
+the TA (TA manual, ``Reading the verdict line'').}
+
+% =====================================================================================
+\section*{End of the session}
+\begin{steps}
+  \item Type \cmd{rome_mode(1);} so that the next person starts in simulation \src{run_mode_table.m:30}.
+  \item Write in the lab notebook the case, the modes, the settings you changed, the run file names and anything
+  unusual. Hand it to the TA.
+  \item Tell the TA you are done. The TA turns the robot off.
+\end{steps}
+
+\end{document}

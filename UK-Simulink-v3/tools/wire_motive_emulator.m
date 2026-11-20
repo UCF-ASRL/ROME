@@ -68,7 +68,7 @@ reF5b = 'double(EnableMotive ~= 0 && EnableHardware ~= 0)';   % F5b reader gate 
 reF7  = 'double(EnableMotive ~= 0 && EnableHardware ~= 0 && ~motive_source_check(motive_source))';   % F7 reader gate (char)
 psVal = 'motive_source_check(motive_source)';  % PoseSelect value (char)
 jtVal = 'double(EnableHardware ~= 0 && arm_freeze_user == 0)';   % JointFromTelemetry value (char): telemetry only on the robot with the arm moving
-pacBan = 'apply_pacing(bdroot); arm_freeze_banner(bdroot)';   % InitFcn set by F1 (char), must stay
+pacBan = 'apply_pacing(bdroot); arm_freeze_banner(bdroot); prerun_check(bdroot)';   % InitFcn set by F1 (char), must stay + prerun_check (F2, tools/wire_prerun_check.m)
 sha = @(s) lower(reshape(dec2hex(typecast(java.security.MessageDigest.getInstance('SHA-256').digest(uint8(unicode2native(s, 'UTF-8'))), 'uint8'), 2).', 1, []));   % SHA-256 of a char (hex char)
 exists = @(b) getSimulinkBlockHandle(b) ~= -1;  % block present in the loaded model (logical)
 srcOf = @(b) get_param(b, 'PortConnectivity');   % port connectivity of a block (struct array)

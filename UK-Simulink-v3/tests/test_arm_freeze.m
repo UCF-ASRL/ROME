@@ -1,6 +1,6 @@
 function varargout = test_arm_freeze(brk)
 %TEST_ARM_FREEZE  Upstream arm freeze (Plan 2 Task 5 test (iv), focus plan F1), offline: EnableHardware = 0.
-%   Author, 19 Nov 2026: ROMECommand.m stays byte-identical to Keanu's version and the student's arm_freeze
+%   Author, 19 Nov 2026: ROMECommand.m keeps Keanu's version (20 Nov: send log lines added, marked [sendlog]) and the student's arm_freeze
 %   (default 1) is applied upstream in the model, with a banner ARM FROZEN / ARM WILL MOVE.
 %   Model under test (tools/wire_arm_freeze.m): ArmFreezeSwitch (u2 = Constant arm_freeze_user > 0.5) sends
 %   Constant q0_9dof(4:9) or CommandGuard's joint command (model rad) to ROMECommand port 2; To Workspace
@@ -28,7 +28,8 @@ function varargout = test_arm_freeze(brk)
 %         half a unit of its %.3f print; M prints 'ARM WILL MOVE' once and no 'ARM FROZEN'. The banner refuses a
 %         wrong flag or a wiring other than tools/wire_arm_freeze.m's (fix round 1), so most breaks of the switch
 %         also patch the copy's banner refusal off ('if ~isempty(prob)' -> 'if false') to reach (a)-(c).
-%     (e) ROME_merged/ROMECommand.m is Keanu's file of lab commit 63a10aa: its bytes are that blob with every LF
+%     (e) ROME_merged/ROMECommand.m without its lines marked [sendlog] (the send log, 20 Nov 2026; the insert-only
+%         check is tests/test_romecommand_sendlog.m P1) is Keanu's file of lab commit 63a10aa: its bytes are that blob with every LF
 %         as CRLF (the lab repo checks out with core.autocrlf = true), i.e. the git blob SHA-1 of the file with
 %         CRLF -> LF equals 05dcb7b42fbcb738942d2d16bee652bb7fca92d1 (git ls-tree 63a10aa
 %         UK-Simulink-v3/ROMECommand.m in ucf-asrl/ROME), and no other CR is in it. When the lab repo is on disk,
@@ -88,12 +89,12 @@ if ~isempty(brk)
     fprintf('MAKE-IT-FAIL break %s (check (%s) must FAIL): %s\n', B{ib,1}, B{ib,2}, B{ib,4});
 end
 
-% ---- limits and map from the user's define_constants.m (the oracle, independent of the copy) ----------------------
-dc0 = fileread(fullfile(root, 'define_constants.m'));   % ROME_merged/define_constants.m text (char)
+% ---- limits and map from the user's lab_settings.m (the oracle, independent of the copy; F14a: moved there) -------
+dc0 = fileread(fullfile(root, 'lab_settings.m'));   % ROME_merged/lab_settings.m text (char)
 L = struct();                                 % user-block values: arm_* (deg or sign)
 for nm = {'arm_sign', 'arm_offset_deg', 'arm_fw_switch', 'arm_fw_other', 'arm_fw_margin_deg'}
     tok = regexp(dc0, ['(?m)^' nm{1} '\s*=\s*([^;%]+);'], 'tokens');
-    assert(numel(tok) == 1, 'test_arm_freeze:dc', '%s: %d user-block lines in define_constants.m (expected 1)', nm{1}, numel(tok));
+    assert(numel(tok) == 1, 'test_arm_freeze:dc', '%s: %d lines in lab_settings.m (expected 1)', nm{1}, numel(tok));
     L.(nm{1}) = eval(tok{1}{1});
 end
 fwLo = min(L.arm_fw_switch, L.arm_fw_other) + L.arm_fw_margin_deg;   % 1x6 lowest joint command sent (firmware deg)
@@ -106,6 +107,7 @@ startdir = pwd;  path0 = path;                % restored at exit
 if bdIsLoaded(mdl), close_system(mdl, 0); end
 mkdir(tmp);
 copyfile(root, tmp);
+prerun_fixture('signoff', tmp);              % F2 wiring: Part F/C sign-off dates in the COPY's lab_settings.m (prerun_check refuses robot runs without)
 mdlcell = {mdl};
 cleanup = onCleanup(@() cellfun(@(c) c(), {@() cd(startdir), @() path(path0), ...
           @() cellfun(@(m) close_system(m, 0), mdlcell(bdIsLoaded(mdl))), @() rmdir(tmp, 's')})); %#ok<NASGU>
@@ -153,6 +155,8 @@ end
 fid = fopen(cmdf, 'r');  raw = fread(fid, Inf, '*uint8').';  fclose(fid);   % bytes (uint8 row)
 txtLF = strrep(char(raw), [cr lf], lf);       % CRLF -> LF (char)
 crlfOnly = ~any(txtLF == cr) && isequal(char(raw), strrep(txtLF, lf, [cr lf]));   % every LF is CRLF, no other CR
+Lk = strsplit(txtLF, lf, 'CollapseDelimiters', false);   % lines (cellstr)
+txtLF = strjoin(Lk(~contains(Lk, '[sendlog]')), lf);      % the send log lines removed: Keanu's lines remain (char)
 md = java.security.MessageDigest.getInstance('SHA-1');
 blob = lower(reshape(dec2hex(typecast(md.digest([uint8(sprintf('blob %d', numel(txtLF))) uint8(0) uint8(txtLF)]), 'uint8'), 2).', 1, []));   % git blob id (hex)
 ucf = fileparts(fileparts(fileparts(fileparts(root))));   % .../UCF (char)
@@ -204,6 +208,7 @@ for r = 1:size(cfg, 1)
         rehash;
         evalc('load_system(slx)');            % PostLoadFcn = define_constants of the copy
     end
+    prerun_fixture('park', tmp);             % F2/F11 wiring: park record of the copy's settings, as calibrateROMEArm writes it
     S = struct('name', nm, 'dcErr', dcErr);
     S.afBefore  = evalin('base', 'arm_freeze');
     S.afuBefore = NaN;  try, S.afuBefore = evalin('base', 'arm_freeze_user'); catch, end

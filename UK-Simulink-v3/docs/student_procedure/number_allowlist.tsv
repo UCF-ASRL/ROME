@@ -4,11 +4,11 @@
 # Paths resolve against ConstrainedMultibodySubmission/, ROME_merged/, docs/verification/ or the lab repo ucf-asrl/ROME.
 # These cite code lines (settings and printed text), not run logs; see the task-5 report (deviation).
 0	run_mode_table.m:30	run mode table row of mode 1: EnableHardware 0 (simulate only)
-1	define_constants.m:5;run_mode_table.m:30	scenario = 1 (default case), run_mode = 1 / "MODE 1" / "Mode 1" (mode 1, the default); printed "Joint 1" (0-based index, calibrateROMEArm)
-2	define_constants.m:5;define_constants.m:440;run_mode_table.m:31	case 2 (V-bar); "2m x 2m" in the printed warning; run_mode = 2 / "MODE 2" / "Mode 2"
-3	define_constants.m:5;run_mode_table.m:32	case 3 (R-bar); run_mode = 3 / "MODE 3" / "Mode 3"
-4	define_constants.m:5;run_mode_table.m:33	case 4 (NMC); run_mode = 4 / "MODE 4" / "Mode 4"
-5	define_constants.m:5	case 5 (circle)
+1	define_constants.m:8;run_mode_table.m:30	scenario = 1 (default case), run_mode = 1 / "MODE 1" / "Mode 1" (mode 1, the default); printed "Joint 1" (0-based index, calibrateROMEArm)
+2	define_constants.m:8;define_constants.m:335;run_mode_table.m:31	case 2 (V-bar); "2m x 2m" in the printed warning; run_mode = 2 / "MODE 2" / "Mode 2"
+3	define_constants.m:8;run_mode_table.m:32	case 3 (R-bar); run_mode = 3 / "MODE 3" / "Mode 3"
+4	define_constants.m:8;run_mode_table.m:33	case 4 (NMC); run_mode = 4 / "MODE 4" / "Mode 4"
+5	define_constants.m:8	case 5 (circle)
 9	check_9dof.m:58;plot_9dof.m:85	printed text "9-DOF ..."
 120	calibrateROMEArm.m:11	calibration timeout, seconds
 250	UK-Arduino/ROME_Mega_Code/ROME_Mega_Code.ino:10	Mega watchdog, milliseconds
@@ -17,4 +17,11 @@
 10	docs/verification/2026-11-19_f4_pacing_rate_analysis.md:48	catch-up of the 0.5 s offset over about 10 to 20 s (F4 analysis)
 20	docs/verification/2026-11-19_f4_pacing_rate_analysis.md:48	catch-up of the 0.5 s offset over about 10 to 20 s (F4 analysis)
 2.10	2026-11-19_p2t1_test_suite.log:25	printed "Required Workspace:   2.10 x 2.10 meters", scenario 1 at the default size (define_constants.m:368-369 prints it)
-19	arm_freeze_banner.m:81	date of the author's decision that removed the frozen-arm refusal ("since 19 Nov", troubleshooting)
+19	arm_freeze_banner.m:85	date of the author's decision that removed the frozen-arm refusal ("since 19 Nov", troubleshooting)
+10	rome_run_end.m:14	the verdict timer waits up to 10 s for the run output (student sheet verdict step; TA manual, Reading the verdict line)
+12	UK-Arduino/ROME_Mega_Code/ROME_Mega_Code.ino:6	PULSES_PER_REVOLUTION 12 in the Mega wheel firmware (TA manual, bench step; hw audit row 40)
+6	UK-Arduino/ROME_Mega_Code/ROME.h:8;UK-Arduino/ROME_Mega_Code/ROME_Mega_Code.ino:5	pulsesPerRev 6 in ROME.h; 6 in wheel in the Mega comment (TA manual, bench step; hw audit rows 40, 58)
+0.0762	define_constants.m:85;UK-Arduino/ROME_Mega_Code/ROME_Mega_Code.ino:5	wheel radius r in the model; WHEEL_DIAMETER macro in the Mega (TA manual, bench step; hw audit row 58)
+239.255.42.99	Optitrack/MotiveData.m:49	camera multicast address (TA manual, mode 4 camera notes; hw audit row 67)
+1511	Optitrack/MotiveData.m:50	camera data port (TA manual, mode 4 camera notes; hw audit row 67)
+90	lab_settings.m:113;lab_settings.m:121	J1: physical forward is model J1 = +90; offset -90 or +90 (TA manual, J1 map paragraph; hw audit row 25)

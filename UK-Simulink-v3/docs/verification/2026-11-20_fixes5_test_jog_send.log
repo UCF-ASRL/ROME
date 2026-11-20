@@ -1,0 +1,7 @@
+(a) limits: switch [-180 132 141 -165 90 180], other [160 0 1 165 -90 -170], margin 2 (define_constants: [-180 132 141 -165 90 180], [160 0 1 165 -90 -170], 2) -> true
+(b) request [1000 -1000 50 1000 0 -1000] -> expected ROME,0,0,0,0,158.000,2.000,50.000,163.000,0.000,-168.000; written {ROME,0,0,0,0,158.000,2.000,50.000,163.000,0.000,-168.000}; returned [158 2 50 163 0 -168]; error '' -> true
+(c) not synced: error 'jog_rome_send:notelemetry' (No ARM telemetry received yet: nothing is sent to the arm. The jogger starts from the arm's own reading. Is the arm calibrated (calibrateROMEArm) and the ESP32 on? Otherwise call the TA.); lines written 0 -> true
+(d) NaN in the request: error 'jog_rome_send:target'; lines written 0 -> true
+(e) jogROMEArm.m: 'ROME,' x0, write( x1, core called 1, limits read 1 -> true
+test_jog_send PASS: (a) (b) (c) (d) (e)
+EXIT 0

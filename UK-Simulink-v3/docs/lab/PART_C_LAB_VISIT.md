@@ -1,7 +1,7 @@
 # Part C — Lab-frame visit: one-visit checklist
 
 Prepared 19 Nov 2026 (drafted by Claude for the author). **NOT EXECUTED.** Every blank below is empty on purpose.
-Spec: `docs/2026-11-18-rome-sim-to-lab-plan.md` Part C steps 9-13. Plan: `docs/superpowers/plans/2026-11-19-plan3-lab-procedure.md` Task 1.
+Spec: `docs/2026-11-18-rome-sim-to-lab-plan.md` Part C steps 9-13. Plan: Plan 3, lab procedure (a review document, not in the lab repo), Task 1.
 
 Rule for this document: a statement about hardware or code carries its file and line, or its document and printed page.
 Anything not found is written **NOT VERIFIED**, with what would verify it. Paths are relative to
@@ -261,4 +261,4 @@ Pass: all files exist, are named as above, and every photo shows its scale refer
 | C13 photos | ____ | |
 
 Open after the visit: ____.
-Signed (name) ____ Date (YYYY-MM-DD) ____. The date goes into `lab_signoff.m` (the Part C sign-off date field, Plan 3 Task 4, not yet written).
+Signed (name) ____ Date (YYYY-MM-DD) ____. The date goes into `signoff_partC` in `lab_settings.m` (the Part C sign-off date, 'yyyy-mm-dd'; '' = not signed).

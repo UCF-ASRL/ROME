@@ -12,10 +12,15 @@ classdef RobotLinkEcho < RobotLinkRecorder
     %   echo    otherwise: "ARM,<the six joint fields of the ROME line, as sent>,READY" (the arm is at its command,
     %           to the %.3f print of the line)
     % Each answer is also recorded, as an R record (tab separated, like RobotLinkRecorder): R tsim twall hex.
+    % STALL (focus plan F14a, tests/test_run_verdict.m): if robot_link_stall.txt exists in this file's folder and holds
+    % "<n> <s>", the n-th ROME line is held s seconds (pause) before it is recorded and answered: a link that stalls,
+    % which the run verdict must report as a watchdog stop. Absent file: no stall (every other test).
     properties (Access = private)
         Pending = ''                    % telemetry text not yet read by ROMECommand (char)
         Replay = {}                     % replay lines, LF-terminated (cell of char); empty: echo mode
         NRome = 0                       % ROME lines received so far (count)
+        StallAt = 0                     % ROME line held before it is recorded (index; 0 = none)
+        StallSec = 0                    % how long it is held (s)
     end
     methods
         function obj = RobotLinkEcho(varargin)
@@ -26,10 +31,16 @@ classdef RobotLinkEcho < RobotLinkRecorder
                 L = L(strlength(L) > 0);
                 obj.Replay = cellfun(@(s) [s char(10)], cellstr(L), 'UniformOutput', false);
             end
+            sf = fullfile(fileparts(mfilename('fullpath')), 'robot_link_stall.txt');   % stall file (char)
+            if isfile(sf)
+                v = sscanf(fileread(sf), '%f');
+                obj.StallAt = v(1);  obj.StallSec = v(2);
+            end
         end
         function write(obj, data, varargin)
-            write@RobotLinkRecorder(obj, data, varargin{:});
             s = char(data(:).');                % the line written (char)
+            if startsWith(s, 'ROME,') && obj.NRome + 1 == obj.StallAt, pause(obj.StallSec); end   % F14a stall
+            write@RobotLinkRecorder(obj, data, varargin{:});
             if ~startsWith(s, 'ROME,'), return; end
             obj.NRome = obj.NRome + 1;
             if ~isempty(obj.Replay)

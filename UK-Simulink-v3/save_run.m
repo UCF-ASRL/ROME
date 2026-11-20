@@ -25,6 +25,21 @@ function f = save_run(out, snap, tag, dirOut)
 %   save_run:onedrive whenever the output folder path contains "OneDrive" (the default folder does, on this PC):
 %   save lab runs to a local, unsynced folder, or keep one writer per synced folder.
 %   Pure apart from the file it writes: reads no workspace, runs no model.
+%
+%   f = save_run()    NO ARGUMENTS (focus plan F14a, the student's one command after a run): saves the LAST run.
+%     out    the base variable out (the output Simulink leaves after Run; save_run:noout when there is none);
+%     snap   the snapshot taken when that run stopped (base rome_last_run.snap, written by the model's StopFcn
+%            rome_run_end.m), when rome_last_run belongs to that out: same model, and out's stop stamp within 15 s of
+%            rome_last_run.stop_wall (or its start stamp equal to rome_last_run.out_start). Otherwise a snapshot of now
+%            (collect_run_snapshot) with warning save_run:latesnap, because the settings may have changed since.
+%     tag    'mode<run_mode>' of that snapshot ('run' when unknown); dirOut  rome_last_run.dirOut or the default.
+%     A robot run is saved automatically at its end (rome_run_finish.m); save_run() then prints that file's name and
+%     returns it instead of saving a second copy (save_run: already saved ...).
+%     Prints the file name (save_run: <file>) and reads the base workspace (this form only).
+if nargin == 0
+    f = save_last_run();                           % F14a: the last run, its automatic snapshot (see above)
+    return
+end
 if nargin < 4 || isempty(dirOut), dirOut = fullfile(fileparts(mfilename('fullpath')), 'runs_lab'); end
 tag = char(string(tag));                       % run label (char)
 assert(~isempty(regexp(tag, '^[A-Za-z0-9_-]{1,40}$', 'once')), 'save_run:tag', ...
@@ -78,6 +93,51 @@ catch err
     rethrow(err);
 end
 fprintf('save_run: %s\n', f);
+end
+
+function f = save_last_run()
+% save_run() with no arguments: the last run (base out) with the snapshot of its stop (base rome_last_run).
+if evalin('base', 'exist(''out'', ''var'')') ~= 1
+    error('save_run:noout', 'there is no run to save: the base workspace has no variable out (press Run first, or call save_run(out, snap, tag))');
+end
+o = evalin('base', 'out');                         % the last run output
+R = [];                                            % its stop record (struct), when it matches
+if evalin('base', 'exist(''rome_last_run'', ''var'')') == 1, R = evalin('base', 'rome_last_run'); end
+match = false;                                     % rome_last_run belongs to o (logical)
+if isstruct(R) && isfield(R, 'stop_wall') && isa(o, 'Simulink.SimulationOutput')
+    try
+        md = o.SimulationMetadata;
+        sameStart = isfield(R, 'out_start') && ~isempty(R.out_start) && strcmp(R.out_start, md.TimingInfo.WallClockTimestampStart);
+        dts = seconds(datetime(md.TimingInfo.WallClockTimestampStop, 'InputFormat', 'yyyy-MM-dd HH:mm:ss') - ...
+                      datetime(R.stop_wall, 'InputFormat', 'yyyy-MM-dd HH:mm:ss'));   % output stop minus record stop (s)
+        match = strcmp(md.ModelInfo.ModelName, R.mdl) && (sameStart || (dts >= -2 && dts <= 15));
+    catch
+        match = false;
+    end
+end
+if match && isfield(R, 'file') && ~isempty(R.file) && isfile(R.file)
+    fprintf('save_run: already saved at the end of the run: %s\n', R.file);
+    f = R.file;
+    return
+end
+dirOut = '';                                       % '' = the default folder (char)
+if match
+    snap = R.snap;
+    if isfield(R, 'dirOut'), dirOut = R.dirOut; end
+else
+    snap = collect_run_snapshot(which('define_constants'));
+    warning('save_run:latesnap', ['no stop record of this run (rome_last_run): the snapshot is taken NOW, after the run; ' ...
+            'settings changed since the run would be recorded wrongly']);
+end
+tag = 'run';                                       % file tag (char)
+if isfield(snap, 'run_mode') && isnumeric(snap.run_mode) && isscalar(snap.run_mode) && any(snap.run_mode == 1:4)
+    tag = sprintf('mode%d', snap.run_mode);
+end
+f = save_run(o, snap, tag, dirOut);
+if match
+    R.file = f;
+    assignin('base', 'rome_last_run', R);
+end
 end
 
 function ok = claim_file(f)

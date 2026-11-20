@@ -1,4 +1,4 @@
-function test_suite()
+function test_suite(only, extra)
 %TEST_SUITE  Full check of ROME_merged. Errors if any step fails.
 %   Runs, in this order, each in its own try/catch so every result is printed:
 %     1 gate_all               acceptance gate, check_9dof on scenarios 1-5, in the model
@@ -37,7 +37,28 @@ function test_suite()
 %                              author's four flag sets and arm source; bad run_mode refused at load; only the digit
 %                              changes; stale-SHA refusal; the gate and case runner refuse any mode but 1
 %    21 test_run_mode_core     run_mode_table and set_run_mode on synthetic text (F12 core): flags, refusals, CRLF/LF
-%   and asserts that define_constants.m has the same SHA-256 before and after
+%    22 test_lab_settings      F14a: 4-line student block, lab_settings.m the one source of the lab constants (sibling,
+%                              not the path), unit comments, stale check and park-record SHA over both files, snapshot
+%    23 test_run_verdict_core  F14a: the PASS/FAIL rule of a robot run on synthetic facts, one fault per item
+%    24 test_run_verdict       F14a: the verdict line and save_run() on the Run-button path against the fake robot,
+%                              modes 2 and 3, one passing run and one injected fault per item
+%    25 test_heading_plot      F14a (F14d fix): the plotted heading error of the saved case-1 run <= 2.6 deg
+%    26 test_prerun_wiring     F2/F11 wiring: InitFcn prerun_check refuses a robot run with every reason; the park record
+%                              calibrateROMEArm writes is accepted in modes 2 and 3; a Mode button after it is refused
+%    27 test_run_record        F3 wiring: mode-1 plot_9dof + save_run() use the StopFcn stop record (no late snapshot);
+%                              the controller's input StateSource out 1 is logged as q_ctrl_in
+%    28 test_camera_guard_wiring  F6 wiring, fake robot mode 3: 5-sample camera dropout held, 6 samples stop the run
+%                              (wheels 0, STOP_ALL last), no arm telemetry -> arm wait refuses with wheels 0
+%    29 test_camera_guard_core camera_guard_core / arm_ready_core, pure (F6 core), checks (a)-(q)
+%    30 test_prerun_core       prerun_check_core and lab/arm_park_record, pure (F2/F11 core), checks (i)-(ix)
+%    31 test_hw_tools_core     save_run and compare_hw_sim_core, pure (F3 core), checks (i)-(v)
+%    32 test_romecommand_sendlog  the send log in ROMECommand.m changes nothing the fake robot receives (P1-P5)
+%    33 test_jog_send          jogROMEArm's arm commands: capped by arm_clamp, none before ARM telemetry (fixes5)
+%   Every listed step must have its own case below; a listed name without one FAILS (test_suite:nostep), so a step
+%   can never be counted as passed without running (wire3 review C1, 20 Nov 2026). test_suite(only) runs only the
+%   named steps (cell of step names; the others are SKIPPED, so the suite then FAILS by design); test_suite(only,
+%   extra) also appends the names in extra to the list (make-it-fail: an extra name without a case must FAIL).
+%   and asserts that define_constants.m and lab_settings.m have the same SHA-256 before and after
 %   (gate_all, check_guard and run_9dof_cases rewrite it under the PRISTINE lock,
 %   CLAUDE.md section 20.4) and that no define_constants.PRISTINE is left behind.
 %   A function, not a script: run_9dof_cases clears the base workspace.
@@ -52,10 +73,20 @@ fid = fopen(dc, 'r');  b0 = fread(fid, Inf, '*uint8');  fclose(fid);     % bytes
 md = java.security.MessageDigest.getInstance('SHA-256');
 h0 = lower(reshape(dec2hex(typecast(md.digest(b0), 'uint8'), 2).', 1, []));   % SHA-256 before, hex
 fprintf('test_suite: %s\n  define_constants.m SHA-256 before: %s\n', root, h0);
+labf = fullfile(root, 'lab_settings.m');                % the TA file (F14a): no step may change it either
+fid = fopen(labf, 'r');  bL0 = fread(fid, Inf, '*uint8');  fclose(fid);   % bytes before
+md = java.security.MessageDigest.getInstance('SHA-256');
+hL0 = lower(reshape(dec2hex(typecast(md.digest(bL0), 'uint8'), 2).', 1, []));   % SHA-256 before, hex
+fprintf('  lab_settings.m SHA-256 before:     %s\n', hL0);
 t0 = tic;
 
 steps = {'gate_all', 'check_guard', 'derivation_checks', 'verify_scenarios', ...
-         'verify_wheelmap', 'verify_eetraj', 'run_9dof_cases(''sim'')', 'test_v3_table3', 'test_run_length', 'test_ar3_fk', 'test_pacing', 'test_commanding_check', 'test_clearance', 'test_motive_reader', 'test_hw_nocam', 'test_arm_freeze', 'test_motive_model', 'test_motive_source', 'test_motive_emulator', 'test_run_mode', 'test_run_mode_core'};   % step names, in run order
+         'verify_wheelmap', 'verify_eetraj', 'run_9dof_cases(''sim'')', 'test_v3_table3', 'test_run_length', 'test_ar3_fk', 'test_pacing', 'test_commanding_check', 'test_clearance', 'test_motive_reader', 'test_hw_nocam', 'test_arm_freeze', 'test_motive_model', 'test_motive_source', 'test_motive_emulator', 'test_run_mode', 'test_run_mode_core', ...
+         'test_lab_settings', 'test_run_verdict_core', 'test_run_verdict', 'test_heading_plot', 'test_prerun_wiring', 'test_run_record', 'test_camera_guard_wiring', ...
+         'test_camera_guard_core', 'test_prerun_core', 'test_hw_tools_core', 'test_romecommand_sendlog', 'test_jog_send'};   % step names, in run order
+if nargin >= 2 && ~isempty(extra), steps = [steps, cellstr(extra)]; end   % make-it-fail only: names without a case
+if nargin < 1 || isempty(only), only = steps; end
+only = cellstr(only);             % steps to run (cell of char); the others are SKIPPED (not a pass)
 ok   = false(1, numel(steps));    % pass flag per step (a skipped step is not a pass)
 skip = false(1, numel(steps));    % true for a step not run because a step it depends on failed
 msg  = repmat({''}, 1, numel(steps));   % error or skip message per step (char, '' when none)
@@ -64,6 +95,10 @@ for k = 1:numel(steps)
     fprintf('\n================ %d/%d %s ================\n', k, numel(steps), steps{k});
     cd(root);
     ts = tic;                     % timer of this step
+    if ~any(strcmp(steps{k}, only))
+        skip(k) = true;  msg{k} = 'SKIPPED: not selected (test_suite(only))';  fprintf('  %s\n', msg{k});
+        continue
+    end
     if k == 8 && ~ok(7)
         % test_v3_table3 checks the runs written by step 7; without them it would check old files.
         skip(k) = true;
@@ -73,28 +108,41 @@ for k = 1:numel(steps)
         continue
     end
     try
-        switch k
-            case 1, gate_all();
-            case 2, check_guard();
-            case 3, derivation_checks();
-            case 4, verify_scenarios();
-            case 5, verify_wheelmap();
-            case 6, verify_eetraj();
-            case 7, run_9dof_cases('sim');
-            case 8, test_v3_table3(fullfile(root, 'runs'), root);
-            case 9, test_run_length();
-            case 10, test_ar3_fk();
-            case 11, test_pacing();
-            case 12, test_commanding_check();
-            case 13, test_clearance();
-            case 14, test_motive_reader();
-            case 15, test_hw_nocam();
-            case 16, test_arm_freeze();
-            case 17, test_motive_model();
-            case 18, test_motive_source();
-            case 19, test_motive_emulator();
-            case 20, test_run_mode();
-            case 21, test_run_mode_core();
+        switch steps{k}            % by NAME: a listed name without a case reaches otherwise and FAILS (review C1)
+            case 'gate_all', gate_all();
+            case 'check_guard', check_guard();
+            case 'derivation_checks', derivation_checks();
+            case 'verify_scenarios', verify_scenarios();
+            case 'verify_wheelmap', verify_wheelmap();
+            case 'verify_eetraj', verify_eetraj();
+            case 'run_9dof_cases(''sim'')', run_9dof_cases('sim');
+            case 'test_v3_table3', test_v3_table3(fullfile(root, 'runs'), root);
+            case 'test_run_length', test_run_length();
+            case 'test_ar3_fk', test_ar3_fk();
+            case 'test_pacing', test_pacing();
+            case 'test_commanding_check', test_commanding_check();
+            case 'test_clearance', test_clearance();
+            case 'test_motive_reader', test_motive_reader();
+            case 'test_hw_nocam', test_hw_nocam();
+            case 'test_arm_freeze', test_arm_freeze();
+            case 'test_motive_model', test_motive_model();
+            case 'test_motive_source', test_motive_source();
+            case 'test_motive_emulator', test_motive_emulator();
+            case 'test_run_mode', test_run_mode();
+            case 'test_run_mode_core', test_run_mode_core();
+            case 'test_lab_settings', test_lab_settings();
+            case 'test_run_verdict_core', test_run_verdict_core();
+            case 'test_run_verdict', test_run_verdict();
+            case 'test_heading_plot', test_heading_plot();
+            case 'test_prerun_wiring', test_prerun_wiring();
+            case 'test_run_record', test_run_record();
+            case 'test_camera_guard_wiring', test_camera_guard_wiring();
+            case 'test_camera_guard_core', test_camera_guard_core();
+            case 'test_prerun_core', test_prerun_core();
+            case 'test_hw_tools_core', test_hw_tools_core();
+            case 'test_romecommand_sendlog', test_romecommand_sendlog();
+            case 'test_jog_send', test_jog_send();
+            otherwise, error('test_suite:nostep', 'step %d ''%s'' is listed but has no case: not run, so not passed', k, steps{k});
         end
         ok(k) = true;
     catch e
@@ -110,6 +158,10 @@ md = java.security.MessageDigest.getInstance('SHA-256');
 h1 = lower(reshape(dec2hex(typecast(md.digest(b1), 'uint8'), 2).', 1, []));   % SHA-256 after, hex
 hash_ok = strcmp(h0, h1);         % true if define_constants.m is byte-identical to before the suite
 lock_ok = ~isfile(lock);          % true if no define_constants.PRISTINE custody lock was left behind
+fid = fopen(labf, 'r');  bL1 = fread(fid, Inf, '*uint8');  fclose(fid);   % bytes of lab_settings.m after the steps
+md = java.security.MessageDigest.getInstance('SHA-256');
+hL1 = lower(reshape(dec2hex(typecast(md.digest(bL1), 'uint8'), 2).', 1, []));   % SHA-256 after, hex
+lab_ok = strcmp(hL0, hL1);        % true if lab_settings.m is byte-identical to before the suite (F14a)
 
 fprintf('\n================ test_suite summary (%.0f s) ================\n', toc(t0));
 lab = {'FAIL', 'PASS'};           % verdict labels, indexed by 1 + logical
@@ -119,11 +171,12 @@ for k = 1:numel(steps)
     fprintf('  %s  %-24s %6.0f s  %s\n', s, steps{k}, dur(k), msg{k});
 end
 fprintf('  %s  define_constants.m SHA-256 after:  %s\n', lab{1 + hash_ok}, h1);
+fprintf('  %s  lab_settings.m SHA-256 after:      %s\n', lab{1 + lab_ok}, hL1);
 fprintf('  %s  no define_constants.PRISTINE left\n', lab{1 + lock_ok});
-if ~(all(ok) && hash_ok && lock_ok)
+if ~(all(ok) && hash_ok && lock_ok && lab_ok)
     bad = strjoin(steps(~ok), ', ');   % names of the failed or skipped steps
-    error('test_suite:fail', 'test_suite FAILED: %d of %d steps failed or skipped (%s); hash unchanged %d; lock absent %d', ...
-          sum(~ok), numel(steps), bad, hash_ok, lock_ok);
+    error('test_suite:fail', 'test_suite FAILED: %d of %d steps failed or skipped (%s); hash unchanged %d; lock absent %d; lab_settings unchanged %d', ...
+          sum(~ok), numel(steps), bad, hash_ok, lock_ok, lab_ok);
 end
-fprintf('\ntest_suite PASS: %d of %d steps, define_constants.m unchanged\n', numel(steps), numel(steps));
+fprintf('\ntest_suite PASS: %d of %d steps, define_constants.m unchanged\n', numel(steps), numel(steps));   % lab_settings.m unchanged too (its own line above); this line's text is quoted by the student procedure
 end

@@ -21,8 +21,8 @@ end
 if ~ok
     if ischar(src) || isstring(src), shown = ['''' char(strjoin(string(src), ' ')) '''']; else, shown = sprintf('a %s', class(src)); end   % value as printed (char)
     error('motive_source_check:invalid', ['motive_source is %s; allowed: ''emulator'' (the model''s predicted base pose ' ...
-          'through the camera pipeline, mode 2) or ''optitrack'' (the real cameras, mode 3). Set it in the user block of ' ...
-          'define_constants.m and re-run it. Run refused.'], shown);
+          'through the camera pipeline, modes 1-3) or ''optitrack'' (the real cameras, mode 4). It follows run_mode: ' ...
+          'set the mode with rome_mode(n). Run refused.'], shown);
 end
 use_emulator = double(strcmp(s, 'emulator'));
 end

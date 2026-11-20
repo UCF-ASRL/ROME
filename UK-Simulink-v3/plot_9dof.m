@@ -37,7 +37,7 @@ if nargin < 1 || isempty(out)
     if bdIsLoaded(mdl), close_system(mdl,0); end
     load_system(fullfile(here,[mdl '.slx']));
     try, assert_sim_mode('plot_9dof', 'base'); catch em_, close_system(mdl,0); rethrow(em_); end   % after the PostLoadFcn
-    set_param(mdl,'StopFcn','');            % plotting is called from here instead
+    % StopFcn kept (F3 wiring): rome_run_end records the stop (rome_last_run), so save_run() saves this run's snapshot
     out = sim(mdl,'SimulationMode','normal','ReturnWorkspaceOutputs','on');
     close_system(mdl,0);
 end
@@ -58,7 +58,7 @@ ee_des = zeros(3,N);   ee_ach = zeros(3,N);
 ve_des = zeros(3,N);   ve_ach = zeros(3,N);
 for k = 1:N
     [p, u, V] = EndEffectorTrajectory(t(k), sc, els, mu_, ts, ds, zw, par);
-    ee_des(:,k) = [p(1); p(2); 2*atan2(u(4), u(1))];    % x, y, commanded yaw
+    ee_des(:,k) = [p(1); p(2); 2*atan2(u(3), u(2))];    % x, y, commanded yaw: u = [0; cos(psi/2); sin(psi/2); 0], the components ee_attitude.m:15 uses (F14d/F14a)
     ve_des(:,k) = [V(1); V(2); V(6)];
     [pe, Re] = ik9_fk(q(k,:).');
     ee_ach(:,k) = [pe(1); pe(2); atan2(Re(2,1), Re(1,1))];

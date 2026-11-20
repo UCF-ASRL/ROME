@@ -37,7 +37,7 @@ fprintf('MATLAB %s\n', version);
 copyfile(here, tmp);
 fprintf('copied %s\n    -> %s\n', here, tmp);
 
-dcFile = fullfile(tmp, 'define_constants.m');                 % the COPY's constants file
+dcFile = fullfile(tmp, 'lab_settings.m');                     % the COPY's lab settings (clearance_margin moved there, F14a)
 src    = fileread(dcFile);                                    % its text
 pat    = 'clearance_margin = 0\.05;';                         % the line set by Task 7
 nHit   = numel(regexp(src, pat));                             % matches of that line

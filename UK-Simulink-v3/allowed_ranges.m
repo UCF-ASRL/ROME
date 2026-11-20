@@ -1,8 +1,10 @@
 function [T, C] = allowed_ranges()
 %ALLOWED_RANGES  Single source of the allowed range of every student-editable user-block variable (focus plan F2).
 %   [T, C] = allowed_ranges()
-%   T  table, one row per variable of the user block of define_constants.m (the block above "Below here is the
-%      formulation"), columns:
+%   T  table, one row per settings variable: the user block of define_constants.m (the block above "Below here is
+%      the formulation") as it was before F14a, now split between that block (scenario, speed_factor, size_factor;
+%      run_mode derives EnableHardware, EnableMotive, motive_source, arm_freeze) and the TA file lab_settings.m (the
+%      rest, focus plan F14a, 19 Nov 2026; the rows did not change). Columns:
 %        name      variable as the student types it (char)
 %        ws_name   base-workspace variable the check reads (char). Differs only for arm_freeze: ROMECommand.m L56
 %                  (Keanu's, kept as is) writes arm_freeze = 0 at every run start, so the value that decides is
@@ -28,6 +30,7 @@ function [T, C] = allowed_ranges()
 %   C  struct of the check constants that are not user-block variables (each with a _src char):
 %        park_tol_deg     print-resolution margin of the frozen-pose = parked-pose comparison (F11); author 19 Nov "OK as is"
 %        min_release      oldest MATLAB release accepted for a hardware run
+%        fw_watchdog_s, arm_track_tol_deg, cam_dropout_max_s   run-verdict thresholds (F14a; NaN = UNSOURCED)
 %        signoff          the bench bounds that a Part F / Part C sign-off certifies (documentation; the sign-off
 %                         record carries only the date, the bounds are applied by the lab tools that the sign-off
 %                         passes: frame_check.m, PART_F 25a)
@@ -125,6 +128,29 @@ C.park_tol_deg_src = ['EFFECTIVELY EXACT EQUALITY: both sides are the same deter
 C.min_release = '2026a';   % oldest MATLAB release accepted for a hardware run (char, as version('-release'))
 C.min_release_src = ['author decision 19 Nov "Lab PC, R2026a" (students run R2026a). Older releases: NOT VERIFIED (the R2025a open/simulate ' ...
     'test was not run); newer: accepted by the lab-procedure plan ("that release or newer"), NOT VERIFIED either'];
+% RUN VERDICT thresholds (focus plan F14a, read by run_verdict_core.m through rome_run_finish.m; the rule itself is a
+% controller ruling, author may change). NaN = no source: the verdict prints the measured number, no PASS/FAIL.
+C.fw_watchdog_s = 0.25;    % longest silence between two commands before the Mega zeroes the wheels (s)
+C.fw_watchdog_s_src = ['ROME_Mega_Code.ino:10 "#define WATCHDOG_TIMEOUT_MS 250" and :180-190 checkWatchdog() (zeroes desiredRPMs when ' ...
+    'millis() - lastCommandTime > 250), as read in docs/verification/2026-11-19_f4_pacing_rate_analysis.md (lab repo, not re-opened for ' ...
+    'F14a). Measured on the SEND side (consecutive lines of the send log); arrival through the ESP32 is NOT VERIFIED'];
+C.arm_track_tol_deg = NaN; % largest |arm telemetry - joint command| a mode 3/4 run may show (deg); NaN = UNSOURCED
+C.arm_track_tol_deg_src = ['UNSOURCED: no bench tolerance exists. Part F (docs/lab/PART_F_BENCH_CHECKLIST.md) leaves the joint ' ...
+    'tracking numbers blank and compare_hw_sim bounds are not set (docs/lab/PART_I_RUN_PLAN.md:88-110, BLOCKED). The verdict prints ' ...
+    'the measured maximum and judges nothing'];
+C.cam_dropout_max_s = 0.25; % longest camera dropout bridged by holding the last pose (s); a longer one stops the run
+C.cam_dropout_max_s_src = ['UNSOURCED (value proposed, f6core-report.md limits table): Claude''s analogy with the Mega comm ' ...
+    'watchdog WATCHDOG_TIMEOUT_MS 250 (ROME_Mega_Code.ino:10): the vehicle runs at most 250 ms on a stale wheel command, so the ' ...
+    'controller gets the same time on a stale pose. The camera guard (CameraGuard, rome_limit.m) and the run verdict read this one number'];
+C.cam_wait_s = 2.0;        % longest wait for the first camera frame before the run is stopped (s)
+C.cam_wait_s_src = ['UNSOURCED (value proposed, f6core-report.md): no document gives a Motive start-up or first-frame time; the ' ...
+    'wheels are gated to zero while waiting. Plan 2 Task 1b motive_wait_s, UNMEASURED and provisional'];
+C.arm_wait_s = 2.0;        % longest wait for the first real ARM telemetry line in modes 3 and 4 (s)
+C.arm_wait_s_src = ['UNSOURCED margin (f6core-report.md): 4 x the longest sourced interval (ARM lines 20 Hz, ROME_Teensy_Code.ino:338; ' ...
+    'ROMECommand pause 0.5 s after connecting, :88; armReady timeout 0.5 s, :182; Teensy watchdog 500 ms, :14)'];
+C.arm_lost_max_s = 0.25;   % longest arm-telemetry loss after the start that is held before the run is stopped (s)
+C.arm_lost_max_s_src = ['UNSOURCED (wire3 review I4, value proposed): the same number as cam_dropout_max_s, by the same analogy ' ...
+    '(Mega watchdog 250 ms). Counted from the step ROMECommand drops armReady, which is itself 0.5 s after the last line (ROMECommand.m:182-184)'];
 C.signoff.partF_src = ['docs/lab/PART_I_RUN_PLAN.md:47 (Part F signed before any robot run). Bound it certifies: a wheel counts as stopped ' ...
     'under 1 rpm after 1 s (Part F 25a), author "Yes" 19 Nov'];
 C.signoff.partC_src = ['docs/lab/PART_I_RUN_PLAN.md:48, :85 (Part C required for camera runs only: optitrack only, not the ' ...

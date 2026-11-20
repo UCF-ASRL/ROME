@@ -20,8 +20,9 @@ function [ok, reasons, info] = prerun_check_core(S)
 %     pacing         struct EnablePacing (char), PacingRate (double), FastRestart (char): get_param of the model
 %     banner_error   '' when arm_freeze_banner(mdl) passed, else its error identifier and message (char). Covers the
 %                    freeze WIRING refusal (arm_freeze_banner:notwired), which needs the model and is not re-done here
-%     dc_sha_at_run  SHA-256 define_constants stored when it last ran to its end (hex char; dc_file_sha.m)
-%     dc_sha_now     SHA-256 of define_constants.m now (hex char)
+%     dc_sha_at_run  settings SHA-256 define_constants stored when it last ran to its end (hex char; settings_sha.m:
+%                    define_constants.m and its TA file lab_settings.m together, focus plan F14a)
+%     dc_sha_now     settings_sha of define_constants.m (and lab_settings.m) now (hex char)
 %     release        version('-release'), e.g. '2026a' (char)
 %     signoff        struct partF, partC: sign-off dates 'yyyy-mm-dd' (char), '' when not signed (lab_signoff.m, later)
 %     frozen_fw_deg  1x6 the joint command a frozen run sends (firmware deg): arm_sign .* rad2deg(q0_9dof(4:9)) +
@@ -137,8 +138,8 @@ end
 info.items{end+1} = 'dc_sha';
 shaRun = fld(S, 'dc_sha_at_run', '');  shaNow = fld(S, 'dc_sha_now', '');   % SHA-256 at the last run / now (hex char)
 if ~(ischar(shaRun) && ischar(shaNow) && ~isempty(shaRun) && strcmp(shaRun, shaNow))
-    reasons{end+1} = sprintf(['dc_sha: define_constants.m SHA-256 now %s, at its last complete run %s; allowed: equal ' ...
-        '(re-run define_constants after every edit); source: arm_freeze_banner.m:38-51 @4134946, dc_file_sha.m'], ...
+    reasons{end+1} = sprintf(['dc_sha: settings SHA-256 (define_constants.m + lab_settings.m) now %s, at its last complete run %s; allowed: equal ' ...
+        '(re-run define_constants after every edit of either file); source: arm_freeze_banner.m:38-51 @4134946, settings_sha.m'], ...
         val_text(shaNow), val_text(shaRun));
 end
 
@@ -206,13 +207,13 @@ if frozen
     end
     if isempty(rec)
         reasons{end+1} = sprintf(['park: no parked record; allowed: a record written by calibrateROMEArm ' ...
-            '(lab/arm_park_record.m) after the last edit of define_constants; source: %s'], psrc);
+            '(lab/arm_park_record.m) after the last edit of define_constants.m or lab_settings.m; source: %s'], psrc);
     elseif ~(isstruct(rec) && isscalar(rec) && all(isfield(rec, {'fw_deg', 'dc_sha'})))
         reasons{end+1} = sprintf('park: parked record malformed (fields fw_deg, dc_sha needed); allowed: arm_park_record(''read'') output; source: %s', psrc);
     else
         if ~(ischar(rec.dc_sha) && ischar(shaNow) && ~isempty(shaNow) && strcmp(rec.dc_sha, shaNow))
-            reasons{end+1} = sprintf(['park: parked record made with define_constants SHA-256 %s, now %s; allowed: equal ' ...
-                '(re-run calibrateROMEArm after editing define_constants); source: %s'], val_text(rec.dc_sha), val_text(shaNow), psrc);
+            reasons{end+1} = sprintf(['park: parked record made with settings SHA-256 %s (define_constants.m + lab_settings.m), now %s; ' ...
+                'allowed: equal (re-run calibrateROMEArm after editing either file); source: %s'], val_text(rec.dc_sha), val_text(shaNow), psrc);
         end
         pf = rec.fw_deg;                             % 1x6 parked joint target (firmware deg)
         if fzOk && isnumeric(pf) && numel(pf) == 6

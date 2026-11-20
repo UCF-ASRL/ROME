@@ -42,6 +42,14 @@ function testLimitSwitches()
     pause(0.5);
     flush(c); 
     
+    % The limit test leaves the Teensy UNCALIBRATED (hw audit row 33; ucf-asrl/ROME 72dbcab
+    % UK-Arduino/ROME_Teensy_Code/ROME_Teensy_Code.ino:182, STOP_ALL in LIMIT_TEST sets armState = UNCALIBRATED),
+    % so the park record is void from here, with the same call as
+    % calibrateROMEArm.m:20. Robot runs (run_mode 2, 3, 4) stay refused until calibrateROMEArm writes a new record.
+    here = fileparts(mfilename('fullpath'));
+    addpath(fullfile(here, 'lab'));  arm_park_record('invalidate', fullfile(here, 'lab', 'arm_park_record.mat'));
+    fprintf('Park record invalidated: run calibrateROMEArm before any robot run (run_mode 2, 3, 4).\n');
+
     % Command the Teensy into the new LIMIT_TEST state
     write(c, "TEST_LIMITS" + newline, "char");
 %% 3. Live Monitoring Loop

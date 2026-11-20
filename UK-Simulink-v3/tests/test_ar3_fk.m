@@ -90,11 +90,11 @@ if ~isequal(size(T), [4 4]) || any(T(4,:) ~= [0 0 0 1])
 end
 
 %% iv  firmware map
-dct = fileread(fullfile(root, 'define_constants.m'));        % text of define_constants.m
+dct = fileread(fullfile(root, 'lab_settings.m'));            % text of lab_settings.m (the firmware ranges moved there, F14a)
 tk  = regexp(dct, '(?m)^arm_fw_switch\s*=\s*\[([^\]]*)\]', 'tokens');
 to  = regexp(dct, '(?m)^arm_fw_other\s*=\s*\[([^\]]*)\]', 'tokens');
 if numel(tk) ~= 1 || numel(to) ~= 1
-    fails{end+1} = sprintf('iv: expected one arm_fw_switch and one arm_fw_other line in define_constants.m, found %d and %d', numel(tk), numel(to));
+    fails{end+1} = sprintf('iv: expected one arm_fw_switch and one arm_fw_other line in lab_settings.m, found %d and %d', numel(tk), numel(to));
     sw = nan(1, 6);  ot = nan(1, 6);
 else
     sw = str2num(tk{1}{1});                 %#ok<ST2NM> 1x6 ROME switch-side limits (firmware deg)

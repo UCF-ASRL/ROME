@@ -1,4 +1,4 @@
-function varargout = test_run_mode(brk)
+function varargout = test_run_mode(brk, parts)
 %TEST_RUN_MODE  The one-number mode selector, wired (focus plan F12): run_mode in define_constants, rome_mode, the
 %   model's four Mode buttons, and the gate's refusal of any mode but 1.
 %   Runs on a TEMPORARY COPY of ROME_merged (tempname). ROME_merged is never written. The copy's ROMECommand.m and
@@ -42,7 +42,18 @@ function varargout = test_run_mode(brk)
 %   MAKE-IT-FAIL: test_run_mode('<id>') applies one break of the table below to the COPY and must then error with
 %   test_run_mode:fail naming its check; test_run_mode('list') returns the table. tests/manual_makefail_f12.m runs them.
 %   Flat function without local functions (CLAUDE.md section 5, crash 2). Clears the base workspace.
+%   SPLIT RUNS: test_run_mode(brk, parts), parts a cellstr of check letters (default all: {'g','e','a','c','j','h',
+%   'i','d','b','f'}), runs and judges only those checks, so each part can run in its own MATLAB process (added
+%   2026-11-20 to isolate an exit-139 crash). The copy and paths are always set up. Dependencies: (a) and (c) are one
+%   loop (either runs both, plus the mode-4 refusal); e, a, c, j, d, h and i all run the (e) prelude (write mode 1 and
+%   lab_settings with measured true, load_system, read the buttons), but (e) is judged only when listed; d, h and i
+%   run the mode-1 prelude of (d) (rome_mode(1)); (j) without (a) runs with the measured-true lab_settings.
 if nargin < 1 || isempty(brk), brk = ''; end
+if nargin < 2 || isempty(parts), parts = {'g','e','a','c','j','h','i','d','b','f'}; end
+parts = cellstr(parts);
+assert(all(ismember(parts, {'g','e','a','c','j','h','i','d','b','f'})), 'test_run_mode:parts', 'unknown part(s): %s', strjoin(parts, ' '));
+P = @(x) any(strcmp(parts, x));               % part x selected (logical)
+allParts = numel(unique(parts)) == 10;        % every part selected (logical)
 here = fileparts(mfilename('fullpath'));      % ROME_merged/tests (char)
 root = fileparts(here);                       % ROME_merged (char)
 mdl  = 'ROME_9DOF';                           % model name (char)
@@ -55,7 +66,7 @@ W = {  % n | EnableHardware | EnableMotive | motive_source | arm_freeze | arm fr
 JTV  = 'double(EnableHardware ~= 0 && arm_freeze_user == 0)';   % JointFromTelemetry Value wanted (char)
 TAG  = 'rome_run_mode_label';                 % canvas label Tag (char)
 OVR  = 'arm_freeze     = run_mode_cfg.arm_freeze;';   % dc_set_mode's override anchor (char)
-MEAS = '    ''measured'', false);';           % define_constants motive_cal line (char)
+MEAS = '    ''measured'', false);';           % lab_settings motive_cal line (char; moved from define_constants, F14a)
 B = { ...
   'mf_a', 'a', {{'file', 'define_constants.m', OVR, 'arm_freeze     = run_mode_cfg.EnableHardware;'}}, 'define_constants derives arm_freeze from the wrong field (mode 3 and 4 freeze the arm)'; ...
   'mf_b', 'b', {{'file', 'define_constants.m', 'run_mode_cfg   = run_mode_table(run_mode);', 'run_mode_cfg   = run_mode_table(max(1, min(4, round(run_mode))));'}}, 'an invalid run_mode is clamped into 1-4 instead of refused'; ...
@@ -108,7 +119,7 @@ dcf = fullfile(tmp, 'define_constants.m');    % the copy's define_constants.m (c
 fid = fopen(dcf, 'r');  dc0 = char(fread(fid, Inf, '*uint8').');  fclose(fid);   % the copy's text (char)
 % (g), second half: dc_set_mode refusals on the real file's text (needs run_mode_table, now on the path from the copy)
 idG = cell(1, 3);                             % dc_set_mode error ids: 0 lines, 2 lines, no anchor (char)
-for k = 1:3
+for k = 1:3 * P('g')
     switch k
         case 1, tg = regexprep(dcReal, '^run_mode[ \t]*=[ \t]*\d+[ \t]*;', '% run_mode removed', 'lineanchors');  ov = struct();
         case 2, tg = [dcReal lf 'run_mode = 2;' lf];  ov = struct();   % lf first: the file has no final newline
@@ -156,17 +167,23 @@ nOV = numel(regexp(dc0, ['^' regexptranslate('escape', OVR)], 'start', 'lineanch
 nFl = cellfun(@(f) numel(regexp(dc0, ['^[ \t]*' f '[ \t]*=(?!=)'], 'start', 'lineanchors')), {'EnableHardware', 'EnableMotive', 'motive_source', 'arm_freeze'});   % assignments per flag (count)
 nTO = numel(strfind(dc0, 'TEST OVERRIDE'));   % override marks (count)
 okG = okG1 && nRM == 1 && nOV == 1 && all(nFl == 1) && nTO == 0;
+if P('g')
 fprintf('(g)  copy define_constants.m (= real: %d): run_mode lines %d, override anchor %d, assignments EH/EM/src/arm_freeze %s, TEST OVERRIDE x%d; dc_set_mode on 0 / 2 lines / no anchor: %s %s %s -> %s\n', ...
         strcmp(dc0, dcReal), nRM, nOV, mat2str(nFl), nTO, idG{:}, mat2str(okG));
 if ~okG, fails{end+1} = '(g) run_mode line / override anchor / one assignment per flag / no TEST OVERRIDE / dc_set_mode refusals'; end
-nMeas = numel(strfind(dc0, MEAS));
-assert(nMeas == 1, 'test_run_mode:dc', 'copy define_constants.m: motive_cal measured line x%d (expected 1)', nMeas);
-dc1 = dc_set_mode(dc0, 1);                    % run_mode 1, motive_cal.measured false (char)
-dcA = strrep(dc1, MEAS, '    ''measured'', true);');   % (a): mode 4 reachable (char)
+end
+labf = fullfile(tmp, 'lab_settings.m');      % the copy's lab_settings.m (char; motive_cal moved there, F14a)
+fid = fopen(labf, 'r');  labOrig = char(fread(fid, Inf, '*uint8').');  fclose(fid);   % its text (char)
+nMeas = numel(strfind(labOrig, MEAS));
+assert(nMeas == 1, 'test_run_mode:dc', 'copy lab_settings.m: motive_cal measured line x%d (expected 1)', nMeas);
+dc1 = dc_set_mode(dc0, 1);                    % run_mode 1 (char)
+labA = strrep(labOrig, MEAS, '    ''measured'', true);');   % (a): mode 4 reachable (char)
 
 % ---- (e) buttons, label and JointFromTelemetry, read back from the copy's model ----------------------------------
-fid = fopen(dcf, 'w');  fwrite(fid, uint8(dcA));  fclose(fid);
-clear define_constants;  rehash;
+if any(ismember(parts, {'e','a','c','j','h','i','d'}))   % the (e) prelude: model loaded in mode 1, buttons read
+fid = fopen(dcf, 'w');  fwrite(fid, uint8(dc1));  fclose(fid);
+fid = fopen(labf, 'w');  fwrite(fid, uint8(labA));  fclose(fid);
+clear define_constants lab_settings;  rehash;
 evalin('base', 'clear all');
 ltxtE = evalc('load_system(slx)');            % PostLoadFcn = the copy's define_constants (mode 1); its printed text (char)
 okBan = contains(ltxtE, W{1,7});
@@ -189,10 +206,12 @@ okL = numel(hl) == 1 && ~contains(lab0, 'MODE ');
 fprintf('(e)  label: %d annotation(s) with Tag %s, saved text names no mode %d; JointFromTelemetry Value ''%s'' (want ''%s'')\n', ...
         numel(hl), TAG, okL, jtv, JTV);
 okE = okE && okL && strcmp(jtv, JTV);
-if ~okE, fails{end+1} = '(e) buttons / label / JointFromTelemetry Value'; end
+if ~okE && P('e'), fails{end+1} = '(e) buttons / label / JointFromTelemetry Value'; end
+end
 
 % ---- (a) and (c): each mode through its button's ClickFcn, from a cleared base ----------------------------------
 okA = true;  okC = true;
+if P('a') || P('c')
 for n = 1:4
     evalin('base', 'clear all');
     fid = fopen(dcf, 'r');  bb = fread(fid, Inf, '*uint8').';  fclose(fid);   % bytes before (uint8 row)
@@ -209,19 +228,20 @@ for n = 1:4
     labn = '';  if numel(hl) == 1, labn = get_param(hl, 'Text'); end
     ok = isempty(err) && isequal(v.run_mode, n) && isequal(v.EnableHardware, W{n,2}) && isequal(v.EnableMotive, W{n,3}) && ...
          isequal(v.motive_source, W{n,4}) && isequal(v.arm_freeze, W{n,5}) && isequal(v.arm_freeze_user, W{n,5}) && ...
-         isequal(js, W{n,6}) && ischar(v.dc_sha_at_run) && strcmp(v.dc_sha_at_run, dc_file_sha(dcf)) && ...
+         isequal(js, W{n,6}) && ischar(v.dc_sha_at_run) && strcmp(v.dc_sha_at_run, settings_sha(dcf)) && ...
          contains(out, W{n,7}) && contains(labn, W{n,7});
     okc = numel(ix) == 1 && isequal(ba, exp_);
     fprintf('(a)  %s: run_mode %s EH %s EM %s src %s arm_freeze %s user %s, arm from telemetry %s (want %d), SHA ok %d, banner printed %d, label %d, error ''%s'' -> %s\n', ...
             cf{n}, mat2str(v.run_mode), mat2str(v.EnableHardware), mat2str(v.EnableMotive), mat2str(v.motive_source), mat2str(v.arm_freeze), ...
-            mat2str(v.arm_freeze_user), mat2str(js), W{n,6}, ischar(v.dc_sha_at_run) && strcmp(v.dc_sha_at_run, dc_file_sha(dcf)), ...
+            mat2str(v.arm_freeze_user), mat2str(js), W{n,6}, ischar(v.dc_sha_at_run) && strcmp(v.dc_sha_at_run, settings_sha(dcf)), ...
             contains(out, W{n,7}), contains(labn, W{n,7}), err, mat2str(ok));
     fprintf('(c)  %s: %d bytes before, %d after, only the run_mode digit changed -> %s\n', cf{n}, numel(bb), numel(ba), mat2str(okc));
     okA = okA && ok;  okC = okC && okc;
 end
 % mode 4 with the file's own motive_cal (measured false): refused
 fid = fopen(dcf, 'w');  fwrite(fid, uint8(dc1));  fclose(fid);
-clear define_constants;  rehash;
+fid = fopen(labf, 'w');  fwrite(fid, uint8(labOrig));  fclose(fid);
+clear define_constants lab_settings;  rehash;
 evalin('base', 'clear all');
 fid = fopen(dcf, 'r');  bb = fread(fid, Inf, '*uint8').';  fclose(fid);
 ix = strfind(char(bb), [lf 'run_mode = ']);
@@ -236,7 +256,9 @@ okc4 = isequal(ba, bb);                       % fix round 1: the previous mode i
 fprintf('(a)  rome_mode(4) with motive_cal.measured false: error ''%s'' (want motive_cal_check:unmeasured), then run_mode %s, arm_freeze_user %s (want 1, 1: mode 1 restored), label ''%s'' -> %s\n', ...
         id4, mat2str(rm4), mat2str(afu4), lab4, mat2str(ok4));
 fprintf('(c)  rome_mode(4) refused: file byte-identical to before the call (previous mode restored) -> %s\n', mat2str(okc4));
+end
 % (j) the label is never saved with a mode
+if P('j')
 evalc('rome_mode(2)');
 labP = '';  if numel(hl) == 1, labP = get_param(hl, 'Text'); end   % label after a press (char)
 save_system(mdl);  close_system(mdl, 0);
@@ -246,17 +268,20 @@ labS = '';  if numel(hl) == 1, labS = get_param(hl, 'Text'); end   % label after
 okJ = contains(labP, W{2,7}) && strcmp(labS, run_mode_label()) && ~contains(labS, 'MODE ');
 fprintf('(j)  label after rome_mode(2): names MODE 2 %d; after save_system + reload: neutral %d -> %s\n', contains(labP, W{2,7}), strcmp(labS, run_mode_label()), mat2str(okJ));
 if ~okJ, fails{end+1} = '(j) label saved with a mode'; end
-okA = okA && ok4;  okC = okC && okc4;
-if ~okA, fails{end+1} = '(a) mode flags / controller arm source / banner / label per button'; end
-if ~okC, fails{end+1} = '(c) bytes of define_constants.m other than the run_mode digit'; end
+end
+if P('a') || P('c'), okA = okA && ok4;  okC = okC && okc4; end
+if ~okA && P('a'), fails{end+1} = '(a) mode flags / controller arm source / banner / label per button'; end
+if ~okC && P('c'), fails{end+1} = '(c) bytes of define_constants.m other than the run_mode digit'; end
 
 % ---- (d) set_run_mode without re-running define_constants: the Run is refused (stale) -----------------------------
+if any(ismember(parts, {'h','i','d'}))       % the mode-1 prelude of (d), needed by (h) and (i) too
 fid = fopen(dcf, 'w');  fwrite(fid, uint8(dc1));  fclose(fid);
 clear define_constants;  rehash;
 evalin('base', 'clear all');
 evalc('rome_mode(1)');
-pre = strcmp(evalin('base', 'dc_sha_at_run'), dc_file_sha(dcf));   % premise: the workspace matches the file (logical)
+pre = strcmp(evalin('base', 'dc_sha_at_run'), settings_sha(dcf));   % premise: the workspace matches the file (logical)
 % ---- (h) rome_mode refuses while the model runs (called from StartFcn, the model running) ----
+if P('h')
 sf0 = get_param(mdl, 'StartFcn');             % restored below (char)
 set_param(mdl, 'StartFcn', [sf0 '; try, rome_mode(2); assignin(''base'', ''rm_running_id'', ''none''); catch e_rm, assignin(''base'', ''rm_running_id'', e_rm.identifier); end']);
 fid = fopen(dcf, 'r');  bh0 = fread(fid, Inf, '*uint8').';  fclose(fid);   % bytes before (uint8 row)
@@ -269,8 +294,10 @@ okH = strcmp(rmid, 'rome_mode:running') && isequal(bh0, bh1) && isempty(hErr);
 fprintf('(h)  rome_mode(2) from StartFcn during a run: id ''%s'' (want rome_mode:running), file unchanged %d, sim error ''%s'' -> %s\n', rmid, isequal(bh0, bh1), hErr, mat2str(okH));
 if ~okH, fails{end+1} = '(h) rome_mode during a run'; end
 evalin('base', 'clear rm_running_id');
+end
 evalin('base', 'clear all');  evalc('rome_mode(1)');   % fresh, consistent mode 1 again
 % ---- (i) the banner checks the flags against run_mode and prints the MODE line ----
+if P('i')
 iTxt = '';  iId = '';  try, iTxt = evalc('arm_freeze_banner(mdl)'); catch ex, iId = ex.identifier; end
 assignin('base', 'EnableHardware', 1);        % a student types a flag instead of choosing the mode
 i2Id = '';  i2Msg = '';  try, evalc('arm_freeze_banner(mdl)'); catch ex, i2Id = ex.identifier;  i2Msg = ex.message; end
@@ -282,7 +309,9 @@ okI = isempty(iId) && numel(strfind(iTxt, W{1,7})) == 1 && strcmp(i2Id, 'arm_fre
 fprintf('(i)  banner, mode 1: error ''%s'', MODE 1 line x%d; EnableHardware = 1 typed: ''%s'' names it %d; listed in run_mode_test_override: error ''%s'', TEST OVERRIDE printed %d -> %s\n', ...
         iId, numel(strfind(iTxt, W{1,7})), i2Id, contains(i2Msg, 'EnableHardware'), i3Id, contains(i3Txt, 'TEST OVERRIDE'), mat2str(okI));
 if ~okI, fails{end+1} = '(i) banner mode check / MODE line'; end
-pre = pre && strcmp(evalin('base', 'dc_sha_at_run'), dc_file_sha(dcf));
+end
+if P('d')
+pre = pre && strcmp(evalin('base', 'dc_sha_at_run'), settings_sha(dcf));
 evalc('set_run_mode(2, dcf)');
 ids = {};  simErr = '';
 try
@@ -294,9 +323,13 @@ end
 okD = pre && any(strcmp(ids, 'arm_freeze_banner:stale'));
 fprintf('(d)  premise SHA match %d; after set_run_mode(2) without define_constants the Run: ids %s -> %s\n', pre, strjoin(ids, ', '), mat2str(okD));
 if ~okD, fails{end+1} = sprintf('(d) stale-SHA refusal after set_run_mode without a re-run (%s)', simErr(1:min(end, 200))); end
+end
 close_system(mdl, 0);
+end
 
 % ---- (b) an invalid run_mode in the file is refused at load ------------------------------------------------------
+if bdIsLoaded(mdl), close_system(mdl, 0); end   % split runs: (b) must load fresh (no-op after (d))
+if P('b')
 nR1 = numel(regexp(dc1, '^run_mode = 1;', 'start', 'lineanchors'));
 assert(nR1 == 1, 'test_run_mode:dc', 'run_mode = 1 line x%d (expected 1)', nR1);
 fid = fopen(dcf, 'w');  fwrite(fid, uint8(regexprep(dc1, '^run_mode = 1;', 'run_mode = 7;', 'once', 'lineanchors')));  fclose(fid);
@@ -319,8 +352,10 @@ fprintf('(b)  run_mode = 7: load text names run_mode_table:bad %d, lists the 4 m
         contains(ltxt, 'run_mode must be one of'), banOk, ehDef, mat2str(afuB), strjoin(idsB, ', '), mat2str(okB));
 if ~okB, fails{end+1} = '(b) invalid run_mode refused at load'; end
 close_system(mdl, 0);
+end
 
 % ---- (f) the gate and the case runner refuse any mode but 1 -------------------------------------------------------
+if P('f')
 dc2 = dc_set_mode(dc0, 2);                    % run_mode 2 (char)
 fid = fopen(dcf, 'w');  fwrite(fid, uint8(dc2));  fclose(fid);
 clear define_constants;  rehash;
@@ -343,6 +378,7 @@ for k = 1:size(RN, 1)
     okF = okF && ok;
 end
 if ~okF, fails{end+1} = '(f) a runner simulates a mode other than 1'; end
+end
 if bdIsLoaded(mdl), close_system(mdl, 0); end
 evalin('base', 'clear all');
 
@@ -357,5 +393,5 @@ end
 if ~isempty(fails)
     error('test_run_mode:fail', '%d check(s) failed: %s', numel(fails), strjoin(fails, ' | '));
 end
-fprintf('test_run_mode PASS (a)-(j)\n');
+if allParts, fprintf('test_run_mode PASS (a)-(j)\n'); else, fprintf('test_run_mode PASS parts %s (split run)\n', strjoin(parts, ' ')); end
 end

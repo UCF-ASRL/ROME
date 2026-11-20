@@ -17,8 +17,9 @@ function arm_freeze_banner(mdl)
 %   A run is REFUSED (error) when:
 %     - arm_freeze_user is undefined (noflag) or not exactly 0 or 1 (badflag): the switch (u2 > 0.5) would
 %       act on a value nobody chose;
-%     - define_constants.m changed since define_constants last ran to its end (stale): its SHA-256 now differs
-%       from dc_sha_at_run, or dc_sha_at_run is missing (dc_file_sha.m; fix round 2, ruling R1);
+%     - define_constants.m or its TA file lab_settings.m changed since define_constants last ran to its end (stale):
+%       their combined SHA-256 now (settings_sha.m, F14a) differs from dc_sha_at_run, or dc_sha_at_run is missing
+%       (fix round 2, ruling R1);
 %     - run_mode is undefined (nomode), or a run flag in the base workspace (EnableHardware, EnableMotive,
 %       motive_source, arm_freeze_user) differs from what run_mode gives (run_mode_table; mode): a flag typed in the
 %       Command Window would run a mode nobody selected (focus plan F12, fix round 1). A flag named in the base cell
@@ -29,8 +30,11 @@ function arm_freeze_banner(mdl)
 %       (Value q0_9dof(4:9)), u2 by ArmFreezeUser (Value arm_freeze_user), u3 by CommandGuard output 2, and
 %       feeding ROMECommand input 2. Checked for both values of the flag, so the banner never states a
 %       behaviour the wiring does not have.
+%   A refusal of a robot run first prints its RUN VERDICT FAIL line (run_refused.m, focus plan F14a: Simulink calls no
+%   StopFcn after an InitFcn error), then is rethrown unchanged (same identifier and message).
 %   mdl  model name (char); default bdroot.
 if nargin < 1, mdl = bdroot; end
+try   % F14a: a refusal of a robot run prints its FAIL line (run_refused.m) before it is rethrown unchanged
 try
     af = evalin('base', 'arm_freeze_user');        % 1 joint command held at q0_9dof(4:9), 0 controller's command (flag)
 catch
@@ -47,12 +51,12 @@ end
 shaRun = '';                                       % SHA-256 stored by the last complete define_constants (hex char)
 try, shaRun = evalin('base', 'dc_sha_at_run'); catch, end
 dcf = which('define_constants');                   % the file the model's PostLoadFcn would run (char)
-shaNow = '';                                       % its SHA-256 now (hex char)
-if ~isempty(dcf), shaNow = dc_file_sha(dcf); end
+shaNow = '';                                       % SHA-256 over it and its lab_settings.m now (hex char; settings_sha, F14a)
+if ~isempty(dcf), try, shaNow = settings_sha(dcf); catch, end, end   % unreadable or missing lab_settings.m: '' (refused below)
 shaOk = ischar(shaRun) && ~isempty(shaRun) && strcmp(shaRun, shaNow);   % workspace made by this file (logical)
 if ~shaOk
-    error('arm_freeze_banner:stale', ['define_constants.m changed since it was last run; re-run it (or reopen the model). ' ...
-          'Run refused. (%s: SHA-256 now %s, at the last run %s)'], dcf, shaNow, mat2str(shaRun));
+    error('arm_freeze_banner:stale', ['define_constants.m or lab_settings.m changed since define_constants was last run; re-run it ' ...
+          '(or reopen the model). Run refused. (%s and its lab_settings.m: SHA-256 now %s, at the last run %s)'], dcf, shaNow, mat2str(shaRun));
 end
 % RUN MODE (focus plan F12, fix round 1): the flags must be the ones run_mode gives.
 try
@@ -92,7 +96,7 @@ if ~isempty(mdl) && bdIsLoaded(mdl)
         if ~strcmp(get_param(SW, 'Criteria'), 'u2 > Threshold') || ~strcmp(strtrim(get_param(SW, 'Threshold')), '0.5')
             prob{end+1} = sprintf('switch criterion ''%s'' threshold ''%s'' (want u2 > Threshold, 0.5)', get_param(SW, 'Criteria'), get_param(SW, 'Threshold'));
         end
-        want = {SW, 1, [PO '/1']; SW, 2, [US '/1']; SW, 3, [mdl '/CommandGuard/2']; [mdl '/ROMECommand'], 2, [SW '/1']};   % dst, input, src/port
+        want = {SW, 1, [PO '/1']; SW, 2, [US '/1']; SW, 3, [mdl '/CommandGuard/2']; [mdl '/JointGate'], 1, [SW '/1']; [mdl '/ROMECommand'], 2, [mdl '/JointGate/1']};   % dst, input, src/port (wire3 fix 1: JointGate between the switch and ROMECommand; it passes the switch output, the parked posture q0_9dof(4:9) or the last command held)
         for k = 1:size(want, 1)
             p = get_param(want{k,1}, 'PortConnectivity');
             s = p(want{k,2});
@@ -142,5 +146,9 @@ if af == 1
 else
     fprintf('*** ARM WILL MOVE: arm_freeze_user = 0, %s sends the controller''s joint commands (EnableHardware = %g). To park the arm use run_mode 2 (rome_mode(2)) ***\n', ...
             mdl, eh);
+end
+catch err
+    run_refused(err);                              % the PASS/FAIL line of a refused robot run (F14a)
+    rethrow(err);
 end
 end

@@ -1,0 +1,5 @@
+(a) To Workspace q_ctrl_in fed by StateSource/1, variable 'q_ctrl_in' -> true
+(b) save_run() after plot_9dof: save_run: <tempdir>\tp1b2daebb_2fbf_4bab_966a_0dbe6bd8bab3\runs_lab\2026-11-20_083130_s1_mode1.mat; warning '' ; stop record 1; saved snap = stop snap 1; tag mode1 1 -> true
+(c) out.q_ctrl_in: 621 x 9, same time base 1, joints equal q_meas 1 (max diff 0), finite 1 -> true
+test_run_record PASS
+######## RESULT test_run_record: PASS
