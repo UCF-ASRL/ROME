@@ -137,7 +137,7 @@ clearance_margin = 0.05; % m. check_9dof fails a run whose arm link points come 
                          % this to z = 0 (clearance_9dof z_min, whole run). z = 0 is the base
                          % plate / floor / table plane of the model; every z shifts with the
                          % unmeasured 0.20 m mount height (ik9_fk.m).
-                         % [Claude's call - author to confirm value]
+                         % [author confirmed the value 0.05 m on 19 Nov 2026 ("Confirm", TRACKER Q-T7a); it is not derived, see Q-T7a]
 % LAB SIGN-OFFS (focus plan F2, read by prerun_check.m at every robot Run). The TA enters the date a part was
 % signed, 'yyyy-mm-dd' (char); '' = not signed. prerun_check_core.m refuses every robot run (run_mode 2, 3, 4)
 % without the Part F date (docs/lab/PART_I_RUN_PLAN.md:47), and a camera run (run_mode 4, 'optitrack') without

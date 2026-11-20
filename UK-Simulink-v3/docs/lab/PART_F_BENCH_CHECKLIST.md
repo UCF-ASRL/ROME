@@ -143,7 +143,7 @@ write(c, "STOP_ALL" + newline, "char");   % then stop sending; print every ARM, 
 
 **Model-side predictions (one-time, desk or bench PC; NOT RUN, UNTESTED snippet).** Firmware map in the code: `firmware = arm_sign .* model + arm_offset_deg`, `arm_sign = [1 -1 -1 1 1 1]`, `arm_offset_deg = [0 180 90 0 0 0]` (`define_constants.m` L102-103). Candidate physical maps: `romefw_to_arcs_deg(fw, 'rome_dirpin')` and `(…, 'arcs_caldir')` (`analysis/romefw_to_arcs_deg.m`; TRACKER Q-T5a). Per joint, the displacement of the flange for +5° firmware under each map, and under the model:
 ```matlab
-cd ROME_merged;  addpath(genpath('analysis'));  evalc('define_constants');
+cd UK-Simulink-v3;  % (ROME_merged in the review repo)  addpath(genpath('analysis'));  evalc('define_constants');
 fw = [____ ____ ____ ____ ____ ____];          % the firmware reading before the jog
 for j = 1:6
     d = zeros(6,1);  d(j) = 5;

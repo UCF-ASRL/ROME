@@ -29,7 +29,7 @@ function cal = fit_motive_cal(recs, marks, opts)
 %     t          3x1 m, floor-frame position of the Motive origin
 %     scale      m per Motive unit
 %     measured   ALWAYS false. A fit does not make a transform measured: only the author's sign-off after
-%                the Part C visit sets it (lab_signoff / define_constants, Plan 3 Task 4).
+%                the Part C visit sets it (motive_cal in lab_settings.m).
 %     fit_ok     true when the residual gate passes: rms_pos_m <= k * rms_expected_m, with
 %                rms_expected_m = sqrt(sigma_mocap_m^2 + sigma_mark_m^2) * sqrt((3n - 7)/n) (7 fitted parameters;
 %                sigma_mocap_m = scale * rms over marks of (per-mark std / sqrt(frames)))

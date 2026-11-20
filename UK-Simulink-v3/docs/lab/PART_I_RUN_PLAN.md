@@ -4,7 +4,7 @@ Prepared 19 Nov 2026 (Plan 3 Task 6, Step 1); run list rewritten 19 Nov 2026 (ni
 Spec: `docs/2026-11-18-rome-sim-to-lab-plan.md` Part I (steps 35-36) and the author's answers of 18 and 19 Nov (TRACKER §2): the four modes, "Base-path test (as built)" for mode 2, "Full Part F" before any robot run, and "We need to recalibrate no matter what (I believe, based on the current setup?)".
 Rule: a hardware fact carries file:line or a TRACKER row. Anything not found is **NOT VERIFIED**. A pass bound that does not exist yet is written `BLOCKED: <what produces it>`; no number is invented.
 Paths are under `ConstrainedMultibodySubmission/`. `define_constants.m` = `ROME_merged/define_constants.m`; other `.m` files without a folder are in `ROME_merged/`. File:line citations of the doc pass were read at HEAD 94ab2bc. TRACKER rows are cited as "TRACKER §0/§2/§3, row <date> <start of text>". Firmware = `UK-Arduino/...` in the lab repo (read-only).
-Companion documents (not repeated here): `docs/lab/PART_C_LAB_VISIT.md` (lab frame, Motive), `docs/lab/PART_F_BENCH_CHECKLIST.md` (stop tests, joint signs, logging), `docs/student_procedure/ROME_lab_procedure.tex` Section 8 (the step-by-step for a student) and Section 9 (stopping).
+Companion documents (not repeated here): `docs/lab/PART_C_LAB_VISIT.md` (lab frame, Motive), `docs/lab/PART_F_BENCH_CHECKLIST.md` (stop tests, joint signs, logging), `docs/student_procedure/ROME_student_sheet.tex` (the step-by-step for a student, one card per mode) and `docs/student_procedure/ROME_TA_manual.tex` (Safety and Stopping, the TA notes on each card); `ROME_lab_procedure.tex` (19 Nov) is superseded by these two.
 
 **What changed on 19 Nov (doc pass).** The old run list (run 0: base only with `EnableMotive = 0`; run 1: base only with cameras; run 2: base + arm) is replaced by the author's run modes 2, 3 and 4, in that order. `EnableMotive = 0` is no student mode any more: with the camera off the model runs the fake camera (TRACKER §2, row 19 Nov "Author's four modes"). The old run 1 (arm frozen, cameras on) has no run mode and is dropped. The run settings are not typed: one number, `run_mode`, sets them.
 
@@ -32,7 +32,7 @@ Companion documents (not repeated here): `docs/lab/PART_C_LAB_VISIT.md` (lab fra
 | Clear zone, arm | Radius = measured fully-extended reach from the J1 axis + margin set by the author (Part F SAFETY, "Arm clear zone"; both blank: ____ m). Applies to every run while the arm is powered, mode 2 included. |
 | Arm may fall when power is cut | **NOT VERIFIED** (Part F SAFETY). Support or keep clear on every power cut. |
 | Stop sequence | 1. Press **Stop** in Simulink first (`ROMECommand.m:194-196`, `releaseImpl` sends `STOP_ALL`). 2. If anything still moves, send the exact line `STOP_ALL` (not `!`). 3. Cut power. Because the arm's `STOP_ALL` is not a latch, a model that is still running re-sends joint packets, so step 1 must come first. During calibration: power cut only. |
-| Before every run | Fast Restart off: refused in every mode (`apply_pacing.m:67-70`). After the run: `run_mode` back to 1 (student procedure Section 8, last step of each mode). |
+| Before every run | Fast Restart off: refused in every mode (`apply_pacing.m:67-70`). The student types `rome_mode(1)` once, at the end of the session (student sheet, "End of the session", step 1), not after each run; each mode card starts by setting its own mode, and `check_9dof` and `gate_all` refuse any mode but 1 (`assert_sim_mode.m`). |
 
 ## What every run records
 
@@ -45,7 +45,7 @@ Companion documents (not repeated here): `docs/lab/PART_C_LAB_VISIT.md` (lab fra
 
 **Preconditions (all modes)**
 - **The whole Part F bench checklist signed, the joint-map test (item 24) included, before ANY robot run, mode 2 included** (author, 19 Nov: "Full Part F"; `docs/lab/PART_F_BENCH_CHECKLIST.md` item 28). In particular 23 reflash, 24a-d joint signs, J2 map, limit switches, mount; 25a wheels stop, 25b arm stops, 25c power cut, 25d comms-loss hold; 26 wheel order; 27 logging. Sign-off date in `signoff_partF` in `lab_settings.m` (the pre-run check refuses a robot run while it is empty).
-- Simulation of exactly these settings in mode 1: `check_9dof` prints `RESULT: PASS` (`check_9dof.m:256`). The pre-run check (Plan 3 Task 4) summarises the same: **BLOCKED: Plan 3 Task 4**.
+- Simulation of exactly these settings in mode 1: `check_9dof` prints `RESULT: PASS` (`check_9dof.m:256`). The pre-run check (`prerun_check.m`, in the model's InitFcn before every robot run) does not run `check_9dof`; it checks the settings, pacing, settings SHA, release, sign-offs, `motive_cal` and the park record (`prerun_check_core.m`), so this simulation stays a manual step.
 - `speed_factor` chosen from the Plan 2 max_rpm / onset study: **BLOCKED: Plan 2 study (TRACKER P4, Plan 2 Task 8), NOT YET run.** Today's default is `speed_factor = 1.0` (`define_constants.m:62`). At 1.0 the ellipse wheel peak is 42.9 rpm in simulation (TRACKER §0, row 24 Sep "Wheels cut") against the shipped `max_rpm = 80` (`define_constants.m:78`); at 0.25 it was 14.6 rpm (comment at `define_constants.m:63`). These are simulation numbers; what the real wheels do at them is unmeasured.
 - Tests that must have passed on the working copy used for the run: `test_suite` (it exits 139 intermittently on this PC, TRACKER §0 rows 19 Nov, so the reference run is on the lab PC, TRACKER §2 row "Lab PC, R2026a"). That reference run is **BLOCKED: Plan 3 Task 7**, after all tests here are done. The F12 fix-round-1 suite crashed at step 9 (TRACKER §2 F12 row): NOT VERIFIED on 94ab2bc.
 
@@ -54,13 +54,13 @@ Companion documents (not repeated here): `docs/lab/PART_C_LAB_VISIT.md` (lab fra
 2. Place the robot (modes 2 and 3 by hand at the card's start pose, no taped marks; mode 4 on the taped marks).
 3. Calibrate the arm (`calibrateROMEArm`, power cut in hand). **Re-calibrate before every robot run**, also when nothing changed (author, 19 Nov: "We need to recalibrate no matter what (I believe, based on the current setup?)"; that it is physically needed between runs is NOT VERIFIED). Change nothing in `define_constants.m` after this step.
 4. Open the model, Run: the mode line, then the arm line of the mode.
-5. Save the run, then set `run_mode` back to 1.
+5. Save the run (`save_run`). `rome_mode(1)` is typed once at the end of the session, not after each run.
 
 **User-block values** (`define_constants.m`; only `run_mode` differs between the modes)
 
 | Variable | Value | Line | Note |
 |---|---|---|---|
-| `run_mode` | 2, 3 or 4 (see each run) | :7 | Derives EnableHardware 1, EnableMotive 1, `motive_source` and `arm_freeze` (`run_mode_table.m:31-33`). Back to 1 after the run. |
+| `run_mode` | 2, 3 or 4 (see each run) | :7 | Derives EnableHardware 1, EnableMotive 1, `motive_source` and `arm_freeze` (`run_mode_table.m:31-33`). Back to 1 at the end of the session, not after each run. |
 | `scenario` | 1 (case 1, ellipse) | :5 | The student procedure covers case 1 in the robot modes. Another case is the author's choice: ____. |
 | `speed_factor` | **BLOCKED** (Plan 2 study); default 1.0 | :62 | Not above the value of the previous mode's passed run, unless the author says. |
 | `size_factor` | 0.50 (shipped) | :66 | Not changed by this plan. |
@@ -77,7 +77,7 @@ Companion documents (not repeated here): `docs/lab/PART_C_LAB_VISIT.md` (lab fra
 
 **Preconditions:** every-run preconditions above. No Part C. Tested before the robot against the recording fake robot (`tests/test_hw_nocam.m`; test_motive_emulator h3 is mode 2, TRACKER §2 row 19 Nov "Mode 2 (ground vehicle, frozen arm)").
 
-**Settings:** `run_mode = 2;` → `MODE 2: ground vehicle moving, frozen arm, camera off (fake camera)` (`run_mode_table.m:31`). Run banner `*** ARM FROZEN` (`arm_freeze_banner.m:140`); `*** ARM WILL MOVE` means stop at once.
+**Settings:** `run_mode = 2;` → `MODE 2: ground vehicle moving, frozen arm, camera off (fake camera)` (`run_mode_table.m:31`). Run banner `*** ARM FROZEN` (`arm_freeze_banner.m:144`); `*** ARM WILL MOVE` (`arm_freeze_banner.m:147`) means stop at once.
 
 **Safety block:** common block. The arm is powered and parked: keep the arm clear zone. If the arm moves, stop.
 
@@ -113,7 +113,7 @@ Companion documents (not repeated here): `docs/lab/PART_C_LAB_VISIT.md` (lab fra
 
 **Preconditions**
 - Every-run preconditions above, and Run B (mode 3) of the same settings passed: **BLOCKED** (its pass condition is BLOCKED).
-- **Part C sign-off** (lab frame measured: up-axis, units, ground plane, rigid body, floor frame C10-C11, push test C12) recorded in `signoff_partC` in `lab_settings.m`, and `motive_cal` entered with `measured = true` (`define_constants.m:43-47`); until then mode 4 is refused (`motive_cal_check.m:84-86`), and `rome_mode(4)` sets the previous mode back (`rome_mode.m:36-47`). **BLOCKED: Part C visit (lab).** `fit_motive_cal.m` and `record_motive.m` exist (`ROME_merged/lab/`); the fit's gate values are provisional (TRACKER §2 row 19 Nov, Q-P3T1a).
+- **Part C sign-off** (lab frame measured: up-axis, units, ground plane, rigid body, floor frame C10-C11, push test C12) recorded in `signoff_partC` in `lab_settings.m`, and `motive_cal` entered with `measured = true` (`lab_settings.m:49-53`); until then mode 4 is refused (`motive_cal_check.m:84-86`), and `rome_mode(4)` sets the previous mode back (`rome_mode.m:36-47`). **BLOCKED: Part C visit (lab).** `fit_motive_cal.m` and `record_motive.m` exist (`ROME_merged/lab/`); the fit's gate values are provisional (TRACKER §2 row 19 Nov, Q-P3T1a).
 - **Q-P2T1a decided by the author.** With no valid frame at the first step the model is "safe but dead" (TRACKER §3 Q-P2T1a). A Motive dropout moves the base estimate by metres (TRACKER §0, row 19 Nov "A Motive dropout"); the wait for a valid frame and the stop on a dropout (Plan 2 Task 1b) are **NOT built yet** (student procedure Section 8, mode 4).
 - Occlusion with the arm up checked (Part C C9.7).
 - The words "(OptiTrack)" of the mode 4 line are Claude's, NOT VERIFIED with the author (`run_mode_table.m:23-25`).

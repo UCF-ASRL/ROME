@@ -27,7 +27,7 @@ function T = sweep_formulation()
 
 here = fileparts(mfilename('fullpath'));  cd(here);  addpath(here);
 evalc('define_constants');
-dataDir = 'C:\Users\jbelmonte\OneDrive\Joao M. R. Belmonte\UCF\Research';
+dataDir = fullfile(here, 'data');   % folder of the recorded runs scaled_factor_*.mat, beside this file
 SMIN = 0.3;      % screening threshold, bracketed by metric_check
 
 cases = {};

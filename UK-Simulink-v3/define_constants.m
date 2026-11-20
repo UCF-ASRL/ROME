@@ -69,8 +69,8 @@ fprintf('%s\n', run_mode_cfg.banner);             % one line naming the mode, at
 % leaves the lap time alone and only reduces how far and how fast the base
 % has to travel.
 %
-% The defaults below are deliberately slow for a first run. Turn them up one
-% step at a time, re-running gate_all each time.
+% The values below are the shipped ones: speed_factor 1.0 is the designed speed (not slow), size_factor 0.50. Change
+% one at a time and re-run gate_all each time.
 % speed_factor = 1.0     of the designed speed. Wheel peak scales with it:
 %   0.25 gave 14.6 rpm on the ellipse (24 Sep 2026, onset model);
 %   1.0 restored on 24 Sep 2026 (evening) at the author's request,

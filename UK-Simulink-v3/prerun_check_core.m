@@ -24,7 +24,7 @@ function [ok, reasons, info] = prerun_check_core(S)
 %                    define_constants.m and its TA file lab_settings.m together, focus plan F14a)
 %     dc_sha_now     settings_sha of define_constants.m (and lab_settings.m) now (hex char)
 %     release        version('-release'), e.g. '2026a' (char)
-%     signoff        struct partF, partC: sign-off dates 'yyyy-mm-dd' (char), '' when not signed (lab_signoff.m, later)
+%     signoff        struct partF, partC: sign-off dates 'yyyy-mm-dd' (char), '' when not signed (the signoff_partF / signoff_partC fields of lab_settings.m)
 %     frozen_fw_deg  1x6 the joint command a frozen run sends (firmware deg): arm_sign .* rad2deg(q0_9dof(4:9)) +
 %                    arm_offset_deg, then arm_clamp, the computation of arm_freeze_banner.m:88-96 @4134946 and
 %                    ROMECommand. NOT arm_freeze_deg, which can be stale (TRACKER Q-F1-a)
