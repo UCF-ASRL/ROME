@@ -1,0 +1,3 @@
+# The send-log test asserts this baseline byte for byte with LF line ends (git blob 05dcb7b, as git stores it);
+# with core.autocrlf=true a Windows checkout would get CRLF and test_romecommand_sendlog P1/P2 would fail.
+tests/ROMECommand_lab_05dcb7b.txt -text
